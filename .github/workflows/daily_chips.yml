@@ -1,0 +1,38 @@
+name: 每日台股籌碼資料更新
+
+on:
+  schedule:
+    # 台灣時間 14:35（UTC+8），換算為 UTC 06:35
+    # 每週一到週五執行
+    - cron: '35 6 * * 1-5'
+
+  # 也允許手動觸發（方便測試）
+  workflow_dispatch:
+
+jobs:
+  fetch-chips:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 步驟 1：下載你的程式碼
+      - name: 下載程式碼
+        uses: actions/checkout@v4
+
+      # 步驟 2：安裝 Python
+      - name: 設定 Python 環境
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # 步驟 3：安裝需要的套件
+      - name: 安裝套件
+        run: |
+          pip install requests gspread google-auth
+
+      # 步驟 4：執行抓取腳本
+      - name: 執行籌碼資料抓取
+        env:
+          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+        run: |
+          python fetch_chips.py
