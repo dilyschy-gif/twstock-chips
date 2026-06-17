@@ -1,18 +1,17 @@
-name: 每月台股營收資料更新
+name: 每日候選股月營收更新
 
 on:
   schedule:
-    # 每月 11 日台灣時間 09:00（UTC 01:00），月營收約 10 日後公布完整
-    - cron: '0 1 11 * *'
+    # 台灣時間 14:45（UTC 06:45），緊接在籌碼資料更新（14:35）之後
+    # 每週一到週五執行
+    - cron: '45 6 * * 1-5'
 
-  # 允許手動觸發（方便測試或補抓）
   workflow_dispatch:
 
 jobs:
   fetch-revenue:
     runs-on: ubuntu-latest
-    # 月營收要抓近 2000 檔，給足夠時間（GitHub Actions 單個 job 上限 6 小時）
-    timeout-minutes: 60
+    timeout-minutes: 20
 
     steps:
       - name: 下載程式碼
@@ -27,7 +26,7 @@ jobs:
         run: |
           pip install requests gspread google-auth
 
-      - name: 執行月營收資料抓取
+      - name: 執行候選股月營收抓取
         env:
           GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
