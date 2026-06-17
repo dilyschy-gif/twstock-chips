@@ -1,19 +1,18 @@
 """
-fetch_quality.py
-每月自動抓取全市場 EPS（損益表）與負債比（資產負債表）
-做品質篩選（近四季 EPS 合計 > 0 且 負債比 ≤ 70%）
-並寫入 Google Sheets「品質篩選快取」分頁
+fetch_quality.py — v2 候選股版
+每日自動抓取「籌碼面有三大法人買超」股票的 EPS 與負債比
+做品質篩選，寫入 Google Sheets「品質篩選快取」分頁
 
-執行環境：GitHub Actions（每月 11 日，財報每季更新，搭配月營收一起跑）
+執行環境：GitHub Actions（每天台灣時間 14:55，緊接在月營收之後）
 資料來源：
   - Finmind TaiwanStockFinancialStatements（損益表，取 EPS）
-  - Finmind TaiwanStockBalanceSheet（資產負債表，取總資產/總負債）
+  - Finmind TaiwanStockBalanceSheet（資產負債表）
 
-設計重點：
-  - 每檔股票需 2 次 API 呼叫（EPS + 負債比）
-  - 不受 GAS 6 分鐘限制，可以慢慢跑完全部
-  - 快取 90 天：90 天內已抓過的股票直接跳過
-  - 402 額度用完時安全停止，已完成的部分不會遺失
+設計重點（v2 改動）：
+  - 不再抓全市場，改為只抓「今日籌碼面有三大法人買超」的股票
+  - 快取 90 天：90 天內已抓過的股票直接跳過，不重複消耗額度
+  - 每檔股票需 2 次 API 呼叫，候選股 100-300 檔，加上月營收的額度，
+    三者合計仍在 Finmind 每日 600 次限制內
 """
 
 import requests
@@ -24,13 +23,12 @@ from datetime import datetime, timedelta
 import gspread
 from google.oauth2.service_account import Credentials
 
-# ══════════ 設定區 ══════════
 SHEET_NAME      = "品質篩選快取"
-STOCK_DB_SHEET  = "股票資料庫"
+CHIPS_SHEET     = "籌碼面資料"
 CACHE_DAYS      = 90
 REQUEST_DELAY   = 0.3
+MAX_CANDIDATES  = 400
 
-# ══════════ 連接 Google Sheets ══════════
 def connect_sheets():
     creds_json = os.environ.get("GOOGLE_CREDENTIALS")
     if not creds_json:
@@ -41,7 +39,7 @@ def connect_sheets():
         "https://www.googleapis.com/auth/drive"
     ]
     creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
-    gc    = gspread.authorize(creds)
+    gc = gspread.authorize(creds)
 
     sheet_id = os.environ.get("GOOGLE_SHEET_ID")
     if not sheet_id:
@@ -54,12 +52,11 @@ def get_finmind_token():
         raise ValueError("找不到 FINMIND_TOKEN 環境變數")
     return token
 
-# ══════════ 取得全市場股票代號清單 ══════════
-def get_all_stock_codes(wb):
+def get_candidate_codes(wb):
     try:
-        sheet = wb.worksheet(STOCK_DB_SHEET)
+        sheet = wb.worksheet(CHIPS_SHEET)
     except gspread.WorksheetNotFound:
-        print(f"❌ 找不到「{STOCK_DB_SHEET}」分頁")
+        print(f"找不到「{CHIPS_SHEET}」分頁")
         return []
 
     all_values = sheet.get_all_values()
@@ -68,22 +65,54 @@ def get_all_stock_codes(wb):
 
     headers = all_values[0]
     try:
-        code_idx = headers.index("股票代號")
-    except ValueError:
-        print("❌ 找不到「股票代號」欄位")
+        date_idx    = headers.index("日期")
+        code_idx    = headers.index("代號")
+        foreign_idx = headers.index("外資買賣超(張)")
+        sitc_idx    = headers.index("投信買賣超(張)")
+    except ValueError as e:
+        print(f"籌碼面資料欄位缺失: {e}")
         return []
 
-    codes = []
+    dates = [row[date_idx] for row in all_values[1:] if row[date_idx]]
+    if not dates:
+        return []
+    latest_date = max(dates)
+    print(f"籌碼面最新日期：{latest_date}")
+
+    sitc_buy    = []
+    foreign_buy = []
+
     for row in all_values[1:]:
-        if len(row) > code_idx:
-            code = str(row[code_idx]).strip()
-            if code.isdigit() and len(code) == 4:
-                codes.append(code)
+        if len(row) <= max(date_idx, code_idx, foreign_idx, sitc_idx):
+            continue
+        if row[date_idx] != latest_date:
+            continue
 
-    print(f"取得全市場股票代號：{len(codes)} 檔")
-    return codes
+        code = str(row[code_idx]).strip()
+        if not code.isdigit() or len(code) != 4:
+            continue
 
-# ══════════ 取得快取中仍有效的代號（90 天內）══════════
+        try:
+            sitc_val    = float(str(row[sitc_idx]).replace(",", "") or 0)
+            foreign_val = float(str(row[foreign_idx]).replace(",", "") or 0)
+        except ValueError:
+            continue
+
+        if sitc_val > 0:
+            sitc_buy.append((code, sitc_val))
+        elif foreign_val > 0:
+            foreign_buy.append((code, foreign_val))
+
+    sitc_buy.sort(key=lambda x: x[1], reverse=True)
+    foreign_buy.sort(key=lambda x: x[1], reverse=True)
+
+    candidates = [c[0] for c in sitc_buy] + [c[0] for c in foreign_buy]
+    candidates = candidates[:MAX_CANDIDATES]
+
+    print(f"候選股：投信買超 {len(sitc_buy)} 檔起，外資補位，"
+          f"共選 {len(candidates)} 檔（上限 {MAX_CANDIDATES}）")
+    return candidates
+
 def get_cached_codes(wb):
     try:
         sheet = wb.worksheet(SHEET_NAME)
@@ -109,7 +138,6 @@ def get_cached_codes(wb):
 
     return valid_codes, sheet
 
-# ══════════ 抓近四季 EPS ══════════
 def fetch_eps_4q(code, token, start_date, end_date):
     url = (
         "https://api.finmindtrade.com/api/v4/data"
@@ -142,7 +170,6 @@ def fetch_eps_4q(code, token, start_date, end_date):
         print(f"  EPS 例外 {code}: {e}")
         return "error", None
 
-# ══════════ 抓最新負債比 ══════════
 def fetch_debt_ratio(code, token, start_date, end_date):
     url = (
         "https://api.finmindtrade.com/api/v4/data"
@@ -188,32 +215,30 @@ def fetch_debt_ratio(code, token, start_date, end_date):
         print(f"  負債比例外 {code}: {e}")
         return "error", None
 
-# ══════════ 寫入快取（更新或新增）══════════
 def upsert_cache_row(sheet, code, cache_date, result_json):
-    # 簡化策略：直接 append，不檢查重複
-    # （讀取時用最新一筆即可，定期清理舊資料）
     sheet.append_row([code, cache_date, result_json], value_input_option="USER_ENTERED")
 
-# ══════════ 主程式 ══════════
 def main():
     print("=" * 50)
-    print("台股全市場品質篩選資料抓取開始")
+    print("候選股品質篩選資料抓取開始")
     print("=" * 50)
 
     now = datetime.now()
     end_date   = now.strftime("%Y-%m-%d")
-    start_date = (now - timedelta(days=400)).strftime("%Y-%m-%d")  # 抓近 13 個月確保有 4 季
+    start_date = (now - timedelta(days=400)).strftime("%Y-%m-%d")
 
     wb    = connect_sheets()
     token = get_finmind_token()
 
-    all_codes = get_all_stock_codes(wb)
-    if not all_codes:
-        print("❌ 無股票代號清單，結束")
+    candidates = get_candidate_codes(wb)
+    if not candidates:
+        print("今日無候選股（無三大法人買超紀錄），結束")
         return
 
     cached, sheet = get_cached_codes(wb)
-    print(f"90 天內已有快取：{len(cached)} 檔，待抓取：{len(all_codes) - len(cached)} 檔")
+    to_fetch = [c for c in candidates if c not in cached]
+    print(f"候選股 {len(candidates)} 檔，90 天內已有快取 {len(candidates) - len(to_fetch)} 檔，"
+          f"待抓取 {len(to_fetch)} 檔")
 
     if sheet is None:
         sheet = wb.add_worksheet(title=SHEET_NAME, rows=20000, cols=3)
@@ -221,13 +246,9 @@ def main():
         print(f"已建立「{SHEET_NAME}」分頁")
 
     cache_date = now.strftime("%Y-%m-%d")
-    success, skipped, failed, quota_hit = 0, 0, 0, False
+    success, failed, quota_hit = 0, 0, False
 
-    for i, code in enumerate(all_codes):
-        if code in cached:
-            skipped += 1
-            continue
-
+    for i, code in enumerate(to_fetch):
         if quota_hit:
             failed += 1
             continue
@@ -278,10 +299,11 @@ def main():
         success += 1
 
         if (i + 1) % 50 == 0:
-            print(f"進度：{i+1}/{len(all_codes)}（成功 {success}，跳過 {skipped}，失敗 {failed}）")
+            print(f"進度：{i+1}/{len(to_fetch)}（成功 {success}，失敗 {failed}）")
 
     print("\n" + "=" * 50)
-    print(f"完成！成功 {success} 檔，快取跳過 {skipped} 檔，失敗 {failed} 檔")
+    print(f"完成！候選股 {len(candidates)} 檔，新抓 {success} 檔，"
+          f"快取跳過 {len(candidates) - len(to_fetch)} 檔，失敗 {failed} 檔")
     print("=" * 50)
 
 if __name__ == "__main__":
