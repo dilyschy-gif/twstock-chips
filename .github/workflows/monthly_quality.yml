@@ -1,0 +1,34 @@
+name: 每月台股品質篩選資料更新
+
+on:
+  schedule:
+    # 每月 11 日台灣時間 10:00（UTC 02:00），跟月營收錯開時間避免衝突
+    - cron: '0 2 11 * *'
+
+  workflow_dispatch:
+
+jobs:
+  fetch-quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: 下載程式碼
+        uses: actions/checkout@v4
+
+      - name: 設定 Python 環境
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 安裝套件
+        run: |
+          pip install requests gspread google-auth
+
+      - name: 執行品質篩選資料抓取
+        env:
+          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+        run: |
+          python fetch_quality.py
