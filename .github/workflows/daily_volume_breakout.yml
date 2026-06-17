@@ -1,0 +1,34 @@
+name: 每日爆量創新高訊號偵測
+
+on:
+  schedule:
+    # 台灣時間 15:05（UTC 07:05），緊接在品質篩選更新（14:55）之後
+    # 每週一到週五執行
+    - cron: '5 7 * * 1-5'
+
+  workflow_dispatch:
+
+jobs:
+  fetch-volume-breakout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: 下載程式碼
+        uses: actions/checkout@v4
+
+      - name: 設定 Python 環境
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 安裝套件
+        run: |
+          pip install requests gspread google-auth
+
+      - name: 執行爆量創新高偵測
+        env:
+          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+        run: |
+          python fetch_volume_breakout.py
