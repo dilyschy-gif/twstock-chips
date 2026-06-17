@@ -1,16 +1,17 @@
-name: 每月台股品質篩選資料更新
+name: 每日候選股品質篩選更新
 
 on:
   schedule:
-    # 每月 11 日台灣時間 10:00（UTC 02:00），跟月營收錯開時間避免衝突
-    - cron: '0 2 11 * *'
+    # 台灣時間 14:55（UTC 06:55），緊接在月營收更新（14:45）之後
+    # 每週一到週五執行
+    - cron: '55 6 * * 1-5'
 
   workflow_dispatch:
 
 jobs:
   fetch-quality:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 30
 
     steps:
       - name: 下載程式碼
@@ -25,7 +26,7 @@ jobs:
         run: |
           pip install requests gspread google-auth
 
-      - name: 執行品質篩選資料抓取
+      - name: 執行候選股品質篩選抓取
         env:
           GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
