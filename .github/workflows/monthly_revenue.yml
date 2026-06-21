@@ -1,0 +1,42 @@
+name: Monthly Revenue Pipeline
+
+# 月營收只在每月1日至20日有意義（公司10日前申報，證交所/櫃買中心
+# 約10-17日左右更新彙總表），所以排程只設定在這個區間執行，
+# 跟你現有的chips/volume/US market每日pipeline分開、互不干擾。
+on:
+  schedule:
+    # 每天台灣時間早上9點執行（UTC 01:00 = UTC+8 09:00）
+    - cron: '0 1 1-20 * *'
+  workflow_dispatch:  # 保留手動觸發按鈕，方便測試或補抓
+
+jobs:
+  fetch-monthly-revenue:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests pandas
+
+      # 如果之後要接Google Sheet寫入，把對應的service account金鑰
+      # 存成GitHub repo secret（例如 GCP_SERVICE_ACCOUNT_JSON），
+      # 再用以下方式還原成檔案：
+      # - name: Restore Google credentials
+      #   run: echo '${{ secrets.GCP_SERVICE_ACCOUNT_JSON }}' > credentials.json
+
+      - name: Run monthly revenue fetch
+        run: python monthly_revenue_fetch.py
+
+      - name: Commit and push if changed
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git add monthly_revenue_*.csv
+          git diff --staged --quiet || git commit -m "chore: update monthly revenue data $(date +%Y-%m-%d)"
+          git push
