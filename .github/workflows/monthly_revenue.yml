@@ -1,8 +1,15 @@
 name: Monthly Revenue Pipeline
 
 # 月營收只在每月1日至20日有意義（公司10日前申報，證交所/櫃買中心
-# 約10-17日左右更新彙總表），所以排程只設定在這個區間執行，
-# 跟你現有的chips/volume/US market每日pipeline分開、互不干擾。
+# 約10-17日左右更新彙總表），跟你現有的chips/volume/US market每日
+# pipeline分開、互不干擾。
+#
+# 這支pipeline直接寫入Google Sheets「月營收」分頁，沿用跟
+# fetch_us_market.py相同的Service Account認證，所以需要repo
+# 已設定好以下兩個secret（如果美股pipeline已經在用，這裡直接沿用即可，
+# 不用重新建立）：
+#   - GOOGLE_CREDENTIALS：Service Account的JSON金鑰內容
+#   - GOOGLE_SHEET_ID：StockRadar Pro試算表的ID
 on:
   schedule:
     # 每天台灣時間早上9點執行（UTC 01:00 = UTC+8 09:00）
@@ -12,6 +19,9 @@ on:
 jobs:
   fetch-monthly-revenue:
     runs-on: ubuntu-latest
+    env:
+      GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+      GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -22,21 +32,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install requests pandas
-
-      # 如果之後要接Google Sheet寫入，把對應的service account金鑰
-      # 存成GitHub repo secret（例如 GCP_SERVICE_ACCOUNT_JSON），
-      # 再用以下方式還原成檔案：
-      # - name: Restore Google credentials
-      #   run: echo '${{ secrets.GCP_SERVICE_ACCOUNT_JSON }}' > credentials.json
+        run: pip install requests pandas gspread google-auth
 
       - name: Run monthly revenue fetch
         run: python monthly_revenue_fetch.py
-
-      - name: Commit and push if changed
-        run: |
-          git config --global user.name 'github-actions[bot]'
-          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-          git add monthly_revenue_*.csv
-          git diff --staged --quiet || git commit -m "chore: update monthly revenue data $(date +%Y-%m-%d)"
-          git push
