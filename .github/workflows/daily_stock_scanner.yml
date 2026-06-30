@@ -1,0 +1,32 @@
+name: Daily Taiwan Stock Scanner
+
+on:
+  schedule:
+    # GitHub Actions uses UTC. 10:05 UTC = 18:05 Asia/Taipei.
+    - cron: '5 10 * * 1-5'
+  workflow_dispatch:
+
+jobs:
+  run-main-scanner:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests gspread google-auth
+
+      - name: Run main stock scanner
+        env:
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+        run: |
+          python main_stock_scanner.py
