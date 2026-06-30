@@ -13,7 +13,7 @@ SCOPES = [
 ]
 
 SHEET_ID = os.environ.get("GOOGLE_SHEET_ID", "")
-SHEET_SCAN = "選股結果"
+SHEET_SCAN_SOURCES = ["掃描結果", "選股結果"]
 SHEET_CHIPS = "籌碼面資料"
 SHEET_OUTPUT = "逆勢抗跌掃描"
 
@@ -222,57 +222,69 @@ def calc_institutional_streaks(gc):
 def read_existing_scan_results(gc):
     sh = get_sheet(gc)
 
-    try:
-        ws = sh.worksheet(SHEET_SCAN)
-    except gspread.exceptions.WorksheetNotFound:
-        names = debug_list_worksheets(sh)
-        print(f"[WARN] 找不到『{SHEET_SCAN}』分頁，現有分頁：{names}")
-        return {}
+    for sheet_name in SHEET_SCAN_SOURCES:
+        try:
+            ws = sh.worksheet(sheet_name)
+        except gspread.exceptions.WorksheetNotFound:
+            names = debug_list_worksheets(sh)
+            print(f"[WARN] 找不到『{sheet_name}』分頁，現有分頁：{names}")
+            continue
 
-    records = ws.get_all_values()
-    if len(records) < 2:
-        print(f"[WARN] 『{SHEET_SCAN}』分頁沒有資料")
-        return {}
+        records = ws.get_all_values()
+        if len(records) < 2:
+            print(f"[WARN] 『{sheet_name}』分頁沒有資料列")
+            continue
 
-    header = records[0]
-    rows = records[1:]
+        header = records[0]
+        rows = records[1:]
+        col_map = build_scan_column_map(header)
+
+        if "code" not in col_map:
+            print(f"[WARN] 無法解析『{sheet_name}』欄位。表頭：{header}")
+            continue
+
+        results = rows_to_scan_results(rows, col_map)
+        print(f"[INFO] 已從『{sheet_name}』讀取 {len(results)} 檔掃描結果")
+        if results:
+            return results
+
+    print("[WARN] 所有掃描來源分頁都沒有可用股票資料。請先確認主掃描已寫入『掃描結果』或『選股結果』。")
+    return {}
+
+
+def build_scan_column_map(header):
+    aliases = {
+        "code": ["代號", "股票代號", "證券代號", "stockCode", "code"],
+        "name": ["名稱", "股票名稱", "證券名稱", "stockName", "name"],
+        "price": ["現價", "收盤價", "成交價", "close", "price"],
+        "signal": ["BB訊號", "訊號", "布林訊號", "BB信號"],
+        "n_target": ["N字目標", "N目標價", "N字目標價"],
+        "start_point": ["起漲點", "起漲價"],
+        "bandwidth": ["帶寬", "帶寬%", "BB帶寬"],
+        "vol_ratio": ["量比", "成交量比", "volumeRatio"],
+        "market": ["市場", "市場別"],
+        "badges": ["badges", "徽章", "標籤"],
+    }
 
     col_map = {}
     for i, h in enumerate(header):
         h_clean = safe_text(h)
-        if h_clean == "代號":
-            col_map["code"] = i
-        elif h_clean == "名稱":
-            col_map["name"] = i
-        elif h_clean in ("現價", "收盤價"):
-            col_map["price"] = i
-        elif h_clean in ("BB訊號", "訊號"):
-            col_map["signal"] = i
-        elif "N字目標" in h_clean:
-            col_map["n_target"] = i
-        elif "起漲點" in h_clean:
-            col_map["start_point"] = i
-        elif "帶寬" in h_clean:
-            col_map["bandwidth"] = i
-        elif "量比" in h_clean:
-            col_map["vol_ratio"] = i
-        elif "市場" in h_clean:
-            col_map["market"] = i
-        elif h_clean == "badges":
-            col_map["badges"] = i
+        for key, names in aliases.items():
+            if h_clean in names or any(name in h_clean for name in names if len(name) >= 3):
+                col_map.setdefault(key, i)
+    return col_map
 
-    if "code" not in col_map:
-        print(f"[WARN] 無法解析『{SHEET_SCAN}』欄位")
-        return {}
 
+def rows_to_scan_results(rows, col_map):
     results = {}
+
     for row in rows:
         try:
             code_idx = col_map.get("code")
             if code_idx is None or code_idx >= len(row):
                 continue
 
-            code = safe_text(row[code_idx])
+            code = safe_text(row[code_idx]).replace(".TW", "").replace(".TWO", "")
             if not code:
                 continue
 
@@ -293,11 +305,11 @@ def read_existing_scan_results(gc):
                 "market": safe_text(safe_get("market")) or "上市",
                 "badges": safe_text(safe_get("badges")),
             }
-        except Exception:
+        except Exception as e:
+            print(f"[WARN] 略過一列掃描資料：{e}")
             continue
 
     return results
-
 
 def fetch_stock_daily_change(code, market="上市"):
     suffix = ".TW" if market == "上市" else ".TWO"
@@ -433,6 +445,8 @@ def write_results(gc, formal_list, watch_list, light, change_pct, change_pts, th
 
     if data_rows:
         ws.update(range_name="A4", values=data_rows)
+    else:
+        ws.update(range_name="A4", values=[["無資料", "主掃描來源沒有可用股票資料，或全部低於觀察門檻", "", "", "", "", "", "", "", "", "", "", "", "", "", ""]])
 
     print(f"\n已寫入「{SHEET_OUTPUT}」分頁，正式 {len(formal_list)} 檔，觀察 {len(watch_list)} 檔")
 
