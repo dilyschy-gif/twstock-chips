@@ -2,9 +2,7 @@ name: 每日台股籌碼資料更新
 
 on:
   schedule:
-    # 台灣時間 17:00（UTC+8），換算為 UTC 09:00
-    # 每週一到週五執行
-    - cron: '0 9 * * 1-5'
+    - cron: '0 10 * * 1-5'
 
   workflow_dispatch:
 
