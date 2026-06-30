@@ -184,6 +184,8 @@ def read_chip_streaks(gc) -> Dict[str, Dict]:
         "trust": ["投信買賣超", "投信"],
         "dealer": ["自營商買賣超", "自營商"],
         "total": ["三法人合計", "三大法人合計", "法人合計", "合計"],
+        "name": ["名稱", "股票名稱", "證券名稱"],
+        "market": ["市場", "市場別"],
     })
 
     if "code" not in col:
@@ -219,6 +221,8 @@ def read_chip_streaks(gc) -> Dict[str, Dict]:
             "total": total,
             "total_from_col": total_from_col,
             "total_recalc": total_recalc,
+            "name": safe_text(get("name", "")),
+            "market": safe_text(get("market", "")),
         })
 
     result = {}
@@ -257,6 +261,8 @@ def read_chip_streaks(gc) -> Dict[str, Dict]:
             "latest_trust": latest.get("trust", 0),
             "latest_dealer": latest.get("dealer", 0),
             "latest_chip_date": latest.get("date", ""),
+            "name": latest.get("name", ""),
+            "market": latest.get("market", ""),
             "trust_streak": trust_streak,
             "foreign_streak": foreign_streak,
             "total_streak": total_streak,
@@ -294,6 +300,34 @@ def count_positive_streak(entries: List[Dict], key: str) -> int:
         else:
             break
     return streak
+
+
+def build_scan_universe(stocks: List[Dict], chips: Dict[str, Dict]) -> List[Dict]:
+    """Use stock database first; if it has no overlap with chips, scan chip universe.
+
+    The current sheet can have 股票資料庫 = 上櫃 universe while 籌碼面資料 = 上市 universe.
+    If we keep using only 股票資料庫, every stock will miss the institutional gate.
+    """
+    stock_codes = {stock["code"] for stock in stocks}
+    chip_codes = set(chips.keys())
+    matched = stock_codes.intersection(chip_codes)
+
+    if matched:
+        return stocks
+
+    print("[WARN] 股票資料庫與籌碼面資料完全沒有交集，改用籌碼面資料建立掃描清單。")
+    chip_stocks = []
+    for code, chip in chips.items():
+        market = chip.get("market") or "上市"
+        chip_stocks.append({
+            "market": market,
+            "code": code,
+            "name": chip.get("name", ""),
+            "industry": "",
+        })
+    chip_stocks.sort(key=lambda x: x["code"])
+    print(f"[DEBUG] 改用籌碼清單掃描：{len(chip_stocks)} 檔")
+    return chip_stocks
 
 
 def yahoo_symbol(code: str, market: str) -> str:
@@ -610,6 +644,7 @@ def run_main_scan():
     print(f"讀取股票資料庫：{len(stocks)} 檔")
     chips = read_chip_streaks(gc)
     print(f"讀取籌碼資料：{len(chips)} 檔")
+    stocks = build_scan_universe(stocks, chips)
     stock_codes = {stock["code"] for stock in stocks}
     matched_chip_codes = stock_codes.intersection(set(chips.keys()))
     positive_chip_codes = {code for code in matched_chip_codes if chips.get(code, {}).get("latest_total", 0) > 0}
