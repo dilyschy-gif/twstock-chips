@@ -89,8 +89,30 @@ def parse_num(value) -> float:
 
 
 def normalize_code(value) -> str:
-    code = safe_text(value).replace(".TW", "").replace(".TWO", "")
-    return code.zfill(4) if code.isdigit() and len(code) < 4 else code
+    """Normalize stock code from Google Sheets/Yahoo formats.
+
+    Handles values like 50, 50.0, 0050, 2330.TW, 8069.TWO,
+    leading apostrophes, whitespace, and invisible formatting characters.
+    """
+    text = safe_text(value)
+    if not text:
+        return ""
+
+    text = text.upper().replace(".TW", "").replace(".TWO", "")
+    text = text.replace("'", "").replace("\u200b", "").replace("\ufeff", "").strip()
+
+    # Google Sheets sometimes returns a code-looking cell as 2330.0.
+    if text.endswith(".0") and text[:-2].replace(".", "", 1).isdigit():
+        text = text[:-2]
+
+    digits = "".join(ch for ch in text if ch.isdigit())
+    if digits:
+        if len(digits) <= 4:
+            return digits.zfill(4)
+        return digits[:6]
+
+    letters_digits = "".join(ch for ch in text if ch.isalnum())
+    return letters_digits
 
 
 def worksheet_or_create(sh, title: str, rows: int = 1000, cols: int = 30):
@@ -593,6 +615,11 @@ def run_main_scan():
     positive_chip_codes = {code for code in matched_chip_codes if chips.get(code, {}).get("latest_total", 0) > 0}
     print(f"[DEBUG] 股票資料庫對到籌碼：{len(matched_chip_codes)}/{len(stock_codes)} 檔")
     print(f"[DEBUG] 本次掃描範圍最近一筆三法人合計買超：{len(positive_chip_codes)} 檔")
+    if len(matched_chip_codes) == 0:
+        sample_stock_codes = sorted(list(stock_codes))[:20]
+        sample_chip_codes = sorted(list(chips.keys()))[:20]
+        print(f"[DEBUG] 股票資料庫代號樣本：{sample_stock_codes}")
+        print(f"[DEBUG] 籌碼資料代號樣本：{sample_chip_codes}")
 
     formal_rows = []
     observe_rows = []
