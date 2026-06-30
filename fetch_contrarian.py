@@ -91,6 +91,7 @@ def fetch_market_index_ma20():
         data = r.json()
         closes = data["chart"]["result"][0]["indicators"]["quote"][0]["close"]
         valid = [c for c in closes if c is not None]
+
         if not valid:
             return 0
         if len(valid) >= 20:
@@ -145,10 +146,11 @@ def calc_institutional_streaks(gc):
             col_map["total"] = i
 
     if "code" not in col_map:
-        print(f"[WARN] 無法解析『{SHEET_CHIPS}』欄位，header={header}")
+        print(f"[WARN] 無法解析『{SHEET_CHIPS}』欄位")
         return {}
 
     stock_data = {}
+
     for row in rows:
         try:
             code = safe_text(row[col_map["code"]]) if col_map["code"] < len(row) else ""
@@ -160,7 +162,10 @@ def calc_institutional_streaks(gc):
             foreign_val = row[col_map["foreign"]] if "foreign" in col_map and col_map["foreign"] < len(row) else "0"
             total_val = row[col_map["total"]] if "total" in col_map and col_map["total"] < len(row) else "0"
 
-            stock_data.setdefault(code, []).append({
+            if code not in stock_data:
+                stock_data[code] = []
+
+            stock_data[code].append({
                 "date": date_str,
                 "trust": parse_num(trust_val),
                 "foreign": parse_num(foreign_val),
@@ -238,40 +243,4 @@ def read_existing_scan_results(gc):
         if h_clean == "代號":
             col_map["code"] = i
         elif h_clean == "名稱":
-            col_map["name"] = i
-        elif h_clean in ("現價", "收盤價"):
-            col_map["price"] = i
-        elif h_clean in ("BB訊號", "訊號"):
-            col_map["signal"] = i
-        elif "N字目標" in h_clean:
-            col_map["n_target"] = i
-        elif "起漲點" in h_clean:
-            col_map["start_point"] = i
-        elif "帶寬" in h_clean:
-            col_map["bandwidth"] = i
-        elif "量比" in h_clean:
-            col_map["vol_ratio"] = i
-        elif "市場" in h_clean:
-            col_map["market"] = i
-        elif h_clean == "badges":
-            col_map["badges"] = i
-
-    if "code" not in col_map:
-        print(f"[WARN] 無法解析『{SHEET_SCAN}』欄位，header={header}")
-        return {}
-
-    results = {}
-    for row in rows:
-        try:
-            code_idx = col_map.get("code")
-            if code_idx is None or code_idx >= len(row):
-                continue
-
-            code = safe_text(row[code_idx])
-            if not code:
-                continue
-
-            def safe_get(key, default=""):
-                idx = col_map.get(key)
-                if idx is None or idx >= len(row):
-                    
+            col_map["name"] = 
