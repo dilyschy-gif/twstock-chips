@@ -158,15 +158,17 @@ def read_chip_streaks(gc) -> Dict[str, Dict]:
     col = build_col_map(headers, {
         "date": ["日期"],
         "code": ["代號", "股票代號", "證券代號"],
-        "foreign": ["外資"],
-        "trust": ["投信"],
-        "dealer": ["自營商"],
-        "total": ["三法人合計", "合計"],
+        "foreign": ["外資買賣超", "外資"],
+        "trust": ["投信買賣超", "投信"],
+        "dealer": ["自營商買賣超", "自營商"],
+        "total": ["三法人合計", "三大法人合計", "法人合計", "合計"],
     })
 
     if "code" not in col:
-        print(f"[WARN] 無法解析『{SHEET_CHIPS}』欄位，籌碼分會全部為 0")
+        print(f"[WARN] 無法解析『{SHEET_CHIPS}』欄位，籌碼分會全部為 0。表頭：{headers}")
         return {}
+
+    print(f"[DEBUG] 籌碼欄位對應：{col}")
 
     by_code: Dict[str, List[Dict]] = {}
     for row in records[1:]:
@@ -179,24 +181,37 @@ def read_chip_streaks(gc) -> Dict[str, Dict]:
             idx = col.get(key)
             return row[idx] if idx is not None and idx < len(row) else default
 
+        foreign = parse_num(get("foreign"))
+        trust = parse_num(get("trust"))
+        dealer = parse_num(get("dealer"))
+        total_from_col = parse_num(get("total")) if "total" in col else 0
+        total_recalc = foreign + trust + dealer
+        total = total_from_col if total_from_col != 0 else total_recalc
+
         by_code.setdefault(code, []).append({
             "date": safe_text(get("date", "")),
-            "foreign": parse_num(get("foreign")),
-            "trust": parse_num(get("trust")),
-            "dealer": parse_num(get("dealer")),
-            "total": parse_num(get("total")),
+            "date_key": parse_chip_date_key(safe_text(get("date", ""))),
+            "foreign": foreign,
+            "trust": trust,
+            "dealer": dealer,
+            "total": total,
+            "total_from_col": total_from_col,
+            "total_recalc": total_recalc,
         })
 
     result = {}
+    positive_latest_count = 0
     for code, entries in by_code.items():
-        entries.sort(key=lambda x: x["date"], reverse=True)
+        entries.sort(key=lambda x: x["date_key"], reverse=True)
         trust_streak = count_positive_streak(entries, "trust")
         foreign_streak = count_positive_streak(entries, "foreign")
         total_streak = count_positive_streak(entries, "total")
-        latest_total = entries[0]["total"] if entries else 0
+        latest = entries[0] if entries else {}
+        latest_total = latest.get("total", 0)
+        if latest_total > 0:
+            positive_latest_count += 1
 
         chips_score = 0
-        max_inst_streak = max(trust_streak, foreign_streak)
         if latest_total > 0:
             chips_score += 10
         if trust_streak >= 15:
@@ -216,17 +231,37 @@ def read_chip_streaks(gc) -> Dict[str, Dict]:
 
         result[code] = {
             "latest_total": latest_total,
+            "latest_foreign": latest.get("foreign", 0),
+            "latest_trust": latest.get("trust", 0),
+            "latest_dealer": latest.get("dealer", 0),
+            "latest_chip_date": latest.get("date", ""),
             "trust_streak": trust_streak,
             "foreign_streak": foreign_streak,
             "total_streak": total_streak,
             "chips_score": min(chips_score, 45),
             "chips_detail": (
-                f"三法人合計{latest_total:.0f}張；"
+                f"{latest.get('date', '')} 三法人合計{latest_total:.0f}張；"
+                f"外資{latest.get('foreign', 0):.0f}；投信{latest.get('trust', 0):.0f}；自營商{latest.get('dealer', 0):.0f}；"
                 f"投信連買{trust_streak}日；外資連買{foreign_streak}日；合計連買{total_streak}日"
             ),
-            "max_inst_streak": max_inst_streak,
+            "max_inst_streak": max(trust_streak, foreign_streak),
         }
+
+    print(f"[DEBUG] 籌碼資料代號數：{len(result)}；最近一筆三法人合計買超：{positive_latest_count} 檔")
     return result
+
+
+def parse_chip_date_key(text: str) -> str:
+    text = safe_text(text)
+    if not text:
+        return ""
+    for fmt in ("%Y-%m-%d", "%Y/%m/%d", "%Y.%m.%d"):
+        try:
+            return datetime.datetime.strptime(text[:10], fmt).strftime("%Y%m%d")
+        except ValueError:
+            pass
+    digits = "".join(ch for ch in text if ch.isdigit())
+    return digits[:8]
 
 
 def count_positive_streak(entries: List[Dict], key: str) -> int:
@@ -553,6 +588,11 @@ def run_main_scan():
     print(f"讀取股票資料庫：{len(stocks)} 檔")
     chips = read_chip_streaks(gc)
     print(f"讀取籌碼資料：{len(chips)} 檔")
+    stock_codes = {stock["code"] for stock in stocks}
+    matched_chip_codes = stock_codes.intersection(set(chips.keys()))
+    positive_chip_codes = {code for code in matched_chip_codes if chips.get(code, {}).get("latest_total", 0) > 0}
+    print(f"[DEBUG] 股票資料庫對到籌碼：{len(matched_chip_codes)}/{len(stock_codes)} 檔")
+    print(f"[DEBUG] 本次掃描範圍最近一筆三法人合計買超：{len(positive_chip_codes)} 檔")
 
     formal_rows = []
     observe_rows = []
