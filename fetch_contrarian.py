@@ -1,20 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-逆勢抗跌標的掃描模組 (fetch_contrarian.py)
-
-整合邏輯：
-1. 大盤燈號（紅 / 黃 / 綠 / 平）
-2. 法人連買
-3. N字 / BB 訊號
-4. 抗跌 / 領先強勢
-5. 正式名單 + 觀察名單
-
-資料來源工作表：
-- 選股結果
-- 籌碼面資料
-- 逆勢抗跌掃描
-"""
-
 import os
 import json
 import time
@@ -29,7 +13,6 @@ SCOPES = [
 ]
 
 SHEET_ID = os.environ.get("GOOGLE_SHEET_ID", "")
-
 SHEET_SCAN = "選股結果"
 SHEET_CHIPS = "籌碼面資料"
 SHEET_OUTPUT = "逆勢抗跌掃描"
@@ -62,9 +45,7 @@ def debug_list_worksheets(sh):
 def parse_num(v):
     try:
         s = str(v).replace(",", "").replace("%", "").strip()
-        if s == "":
-            return 0
-        return float(s)
+        return float(s) if s else 0
     except (ValueError, TypeError):
         return 0
 
@@ -74,7 +55,6 @@ def safe_text(v):
 
 
 def fetch_market_index_change():
-    """從 Yahoo Finance 取得台灣加權指數當日漲跌幅"""
     url = "https://query1.finance.yahoo.com/v8/finance/chart/%5ETWII"
     params = {"range": "5d", "interval": "1d"}
     headers = {"User-Agent": "Mozilla/5.0"}
@@ -101,7 +81,6 @@ def fetch_market_index_change():
 
 
 def fetch_market_index_ma20():
-    """取得加權指數近20日均線"""
     url = "https://query1.finance.yahoo.com/v8/finance/chart/%5ETWII"
     params = {"range": "1mo", "interval": "1d"}
     headers = {"User-Agent": "Mozilla/5.0"}
@@ -134,7 +113,6 @@ def determine_market_light(change_pct, current_price, ma20):
 
 
 def calc_institutional_streaks(gc):
-    """讀取『籌碼面資料』分頁，計算每支股票的投信/外資連續買超天數"""
     sh = get_sheet(gc)
 
     try:
@@ -237,7 +215,6 @@ def calc_institutional_streaks(gc):
 
 
 def read_existing_scan_results(gc):
-    """讀取『選股結果』分頁"""
     sh = get_sheet(gc)
 
     try:
@@ -297,76 +274,4 @@ def read_existing_scan_results(gc):
             def safe_get(key, default=""):
                 idx = col_map.get(key)
                 if idx is None or idx >= len(row):
-                    return default
-                return row[idx]
-
-            def safe_float(key):
-                return parse_num(safe_get(key, "0"))
-
-            results[code] = {
-                "name": safe_text(safe_get("name")),
-                "price": safe_float("price"),
-                "signal": safe_text(safe_get("signal")),
-                "n_target": safe_float("n_target"),
-                "start_point": safe_float("start_point"),
-                "bandwidth": safe_float("bandwidth"),
-                "vol_ratio": safe_float("vol_ratio"),
-                "market": safe_text(safe_get("market")) or "上市",
-                "badges": safe_text(safe_get("badges")),
-            }
-        except Exception:
-            continue
-
-    return results
-
-
-def fetch_stock_daily_change(code, market="上市"):
-    """取得個股當日漲跌幅和成交量"""
-    suffix = ".TW" if market == "上市" else ".TWO"
-    symbol = f"{code}{suffix}"
-    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
-    params = {"range": "2d", "interval": "1d"}
-    headers = {"User-Agent": "Mozilla/5.0"}
-
-    try:
-        r = requests.get(url, params=params, headers=headers, timeout=10)
-        r.raise_for_status()
-        data = r.json()
-        result = data["chart"]["result"][0]
-        closes = result["indicators"]["quote"][0]["close"]
-        volumes = result["indicators"]["quote"][0]["volume"]
-
-        valid_closes = [c for c in closes if c is not None]
-        valid_volumes = [v for v in volumes if v is not None]
-
-        if len(valid_closes) < 2:
-            return None
-
-        current = valid_closes[-1]
-        previous = valid_closes[-2]
-        change_pct = ((current - previous) / previous) * 100
-        volume = valid_volumes[-1] if valid_volumes else 0
-
-        return {
-            "price": round(current, 2),
-            "change_pct": round(change_pct, 2),
-            "volume": volume,
-        }
-    except Exception:
-        return None
-
-
-def calc_contrarian_score(stock_change_pct, market_change_pct):
-    score_a = 0
-    if stock_change_pct > 0:
-        score_a = 15
-    if stock_change_pct > 2:
-        score_a = 20
-
-    if stock_change_pct > 0:
-        rel_strength = abs(market_change_pct) + stock_change_pct
-    else:
-        rel_strength = abs(market_change_pct) - abs(stock_change_pct)
-
-    score_b = 0
-    if 
+                    
