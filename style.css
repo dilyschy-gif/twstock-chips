@@ -110,10 +110,38 @@ h2 {
   box-shadow: 0 0 0 6px rgba(34, 197, 94, 0.18);
 }
 
+.mode-switch,
 .toolbar,
 .summary-grid,
 .content-grid {
   margin-top: 18px;
+}
+
+.mode-switch {
+  display: inline-grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.mode-button {
+  min-width: 150px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+}
+
+.mode-button:hover {
+  background: #eef2f7;
+  color: var(--text);
+}
+
+.mode-button.active {
+  background: var(--accent);
+  color: #ffffff;
 }
 
 .toolbar {
@@ -315,6 +343,15 @@ tr:last-child td {
   .summary-grid,
   .content-grid {
     grid-template-columns: 1fr;
+  }
+
+  .mode-switch {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .mode-button {
+    min-width: 0;
   }
 
   .app-shell {
