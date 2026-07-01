@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TW Stock Chips</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="app-shell">
+    <section class="hero-panel">
+      <div>
+        <p class="eyebrow">Cloudflare Pages Frontend</p>
+        <h1>台股籌碼掃描面板</h1>
+        <p class="lead">這個頁面會在瀏覽器執行 JavaScript。Python 掃描結果之後可以輸出成 data.json，再由這個前端讀取與顯示。</p>
+      </div>
+      <div class="status-card" aria-live="polite">
+        <span class="status-dot"></span>
+        <div>
+          <strong id="runtimeStatus">前端已就緒</strong>
+          <small id="runtimeDetail">等待操作</small>
+        </div>
+      </div>
+    </section>
+
+    <section class="toolbar" aria-label="查詢工具列">
+      <label class="field">
+        <span>股票代號或名稱</span>
+        <input id="stockSearch" type="search" placeholder="例如 2330 或 台積電" autocomplete="off">
+      </label>
+      <label class="field compact">
+        <span>訊號</span>
+        <select id="signalFilter">
+          <option value="all">全部</option>
+          <option value="watch">觀察</option>
+          <option value="strong">強勢</option>
+          <option value="risk">風險</option>
+        </select>
+      </label>
+      <button id="runBtn" type="button">執行前端程式</button>
+      <button id="loadBtn" type="button" class="secondary">讀取 data.json</button>
+    </section>
+
+    <section class="summary-grid" aria-label="摘要">
+      <article>
+        <span>股票筆數</span>
+        <strong id="totalCount">0</strong>
+      </article>
+      <article>
+        <span>強勢訊號</span>
+        <strong id="strongCount">0</strong>
+      </article>
+      <article>
+        <span>觀察清單</span>
+        <strong id="watchCount">0</strong>
+      </article>
+      <article>
+        <span>資料來源</span>
+        <strong id="dataSource">Demo</strong>
+      </article>
+    </section>
+
+    <section class="content-grid">
+      <article class="panel">
+        <div class="panel-header">
+          <div>
+            <p class="eyebrow">Results</p>
+            <h2>掃描結果</h2>
+          </div>
+          <span id="lastUpdated">尚未更新</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>代號</th>
+                <th>名稱</th>
+                <th>訊號</th>
+                <th>籌碼分數</th>
+                <th>備註</th>
+              </tr>
+            </thead>
+            <tbody id="stockRows"></tbody>
+          </table>
+        </div>
+      </article>
+
+      <aside class="panel side-panel">
+        <p class="eyebrow">Next Step</p>
+        <h2>Python 如何接上</h2>
+        <ol>
+          <li>讓 Python 定時產生 data.json。</li>
+          <li>把 data.json 一起推到 GitHub。</li>
+          <li>前端按「讀取 data.json」就能顯示真實結果。</li>
+        </ol>
+        <div class="mini-chart" aria-label="籌碼分數示意圖">
+          <span style="height: 45%"></span>
+          <span style="height: 72%"></span>
+          <span style="height: 56%"></span>
+          <span style="height: 88%"></span>
+          <span style="height: 64%"></span>
+        </div>
+      </aside>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
