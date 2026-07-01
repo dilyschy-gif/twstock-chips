@@ -1,10 +1,16 @@
+# -*- coding: utf-8 -*-
 """
-fetch_chips.py
+fetch_chips.py — v2（TPEX 補上 Referer 標頭）
 每日自動抓取 TWSE + TPEX 三大法人買賣超資料
 並寫入 Google Sheets「籌碼面資料」分頁
 
 執行環境：GitHub Actions（每天台灣時間 14:35 自動執行）
 資料來源：TWSE T86 + TPEX（官方免費，不需要帳號）
+
+v2 改動：
+  fetch_tpex_chips() 補上 Referer、Accept、X-Requested-With 標頭。
+  TPEX 的這個 AJAX 端點原本只帶 User-Agent 時會被判定為非瀏覽器請求，
+  回應「無資料」（aaData 為空），實際上是被擋而非真的沒資料。
 """
 
 import requests
@@ -86,6 +92,11 @@ def fetch_twse_chips(date_str):
 def fetch_tpex_chips(date_str):
     """
     date_str: "20260615" 格式
+
+    v2：補上 Referer / Accept / X-Requested-With 標頭。
+    這支是網站內部的 AJAX 端點，原本只帶 User-Agent 時，
+    伺服器會判定請求不是從網頁本身發出的，回應「無資料」
+    （aaData 為空陣列），並非真的當天沒有交易資料。
     """
     # 轉換為民國年格式
     year  = int(date_str[:4]) - 1911
@@ -95,12 +106,23 @@ def fetch_tpex_chips(date_str):
     year_ad = date_str[:4]
 
     url = f"https://www.tpex.org.tw/web/stock/3insti/daily_trade/3itrade_hedge_result.php?l=zh-tw&se=EW&t=D&d={tw_date}&_={int(time.time()*1000)}"
-    headers = {"User-Agent": "Mozilla/5.0"}
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+        "Referer": "https://www.tpex.org.tw/web/stock/3insti/daily_trade/3itrade_hedge.php?l=zh-tw",  # ← v2 新增
+        "Accept": "application/json, text/javascript, */*; q=0.01",                                    # ← v2 新增
+        "X-Requested-With": "XMLHttpRequest",                                                            # ← v2 新增
+    }
     try:
         res = requests.get(url, headers=headers, timeout=30)
         print(f"TPEX 回應碼: {res.status_code}")
         if res.status_code != 200:
             return []
+
+        text = res.text
+        if text.strip().startswith("<") or "安全性考量" in text:
+            print(f"TPEX 回應被安全機制擋下: {text[:150]}")
+            return []
+
         data = res.json()
         if not data.get("aaData"):
             print("TPEX 無資料")
