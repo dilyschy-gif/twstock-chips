@@ -1,0 +1,24 @@
+name: 診斷測試（TPEx OpenAPI）
+
+on:
+  workflow_dispatch:  # 只能手動觸發，不會自動排程
+
+jobs:
+  diag-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: 下載程式碼
+        uses: actions/checkout@v4
+
+      - name: 設定 Python 環境
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 安裝套件
+        run: pip install requests
+
+      - name: 執行診斷
+        run: python diag_tpex_openapi.py
