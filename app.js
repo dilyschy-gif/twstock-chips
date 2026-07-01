@@ -108,7 +108,7 @@ async function loadJsonData() {
     }
 
     stocks = rows.map(normalizeStock).filter((stock) => stock.code);
-    dataSource = "data.json";
+    dataSource = payload.source || payload.sheet_tab || "data.json";
     render();
     setStatus("資料已更新", "已載入 " + stocks.length + " 筆股票資料");
   } catch (error) {
@@ -131,4 +131,4 @@ elements.stockSearch.addEventListener("input", render);
 elements.signalFilter.addEventListener("change", render);
 
 render();
-setStatus("前端已就緒", "JavaScript 正在瀏覽器中執行");
+loadJsonData();
