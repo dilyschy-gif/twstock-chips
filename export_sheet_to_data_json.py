@@ -87,6 +87,32 @@ def build_col_map(headers: List[str]) -> Dict[str, int]:
     return result
 
 
+def extract_sheet_meta(values: List[List[str]], header_row_index: int) -> Dict[str, str]:
+    meta = {}
+    for row in values[:header_row_index]:
+        for cell in row:
+            text = safe_text(cell)
+            separator = "：" if "：" in text else ":" if ":" in text else ""
+            if not separator:
+                continue
+            key, value = text.split(separator, 1)
+            key = safe_text(key)
+            value = safe_text(value)
+            if key and value:
+                meta[key] = value
+    return meta
+
+
+def find_header_row(values: List[List[str]], sheet_name: str) -> Tuple[int, List[str], Dict[str, int]]:
+    for row_index, row in enumerate(values[:40]):
+        col = build_col_map(row)
+        if "code" in col:
+            return row_index, row, col
+
+    preview = [row for row in values[:5] if any(safe_text(cell) for cell in row)]
+    raise RuntimeError(f"無法解析 {sheet_name} 表頭：{preview}")
+
+
 def get_cell(row: List[str], col: Dict[str, int], key: str, default: str = "") -> str:
     idx = col.get(key)
     if idx is None or idx >= len(row):
@@ -110,7 +136,8 @@ def frontend_signal(category: str, badges: str, score: float, mode: str = "main"
     return "watch"
 
 
-def build_note(row: List[str], col: Dict[str, int], mode: str) -> str:
+def build_note(row: List[str], col: Dict[str, int], mode: str, defaults: Optional[Dict[str, str]] = None) -> str:
+    defaults = defaults or {}
     keys = ["bb_signal", "badges", "chips_detail", "block_reason"]
     if mode == "contrarian":
         keys = ["market_light", "badges", "chips_detail", "block_reason", "bb_signal"]
@@ -118,12 +145,15 @@ def build_note(row: List[str], col: Dict[str, int], mode: str) -> str:
     parts = []
     for key in keys:
         value = get_cell(row, col, key)
+        if not value and key == "market_light":
+            value = defaults.get("大盤燈號", "")
         if value:
             parts.append(value)
     return "；".join(parts) if parts else "Google Sheet 掃描結果"
 
 
-def row_to_stock(row: List[str], col: Dict[str, int], mode: str) -> Optional[Dict]:
+def row_to_stock(row: List[str], col: Dict[str, int], mode: str, defaults: Optional[Dict[str, str]] = None) -> Optional[Dict]:
+    defaults = defaults or {}
     code = get_cell(row, col, "code")
     if not code:
         return None
@@ -131,19 +161,20 @@ def row_to_stock(row: List[str], col: Dict[str, int], mode: str) -> Optional[Dic
     score = parse_num(get_cell(row, col, "score"))
     category = get_cell(row, col, "category")
     badges = get_cell(row, col, "badges")
+    market_light = get_cell(row, col, "market_light") or defaults.get("大盤燈號", "")
     return {
         "code": code,
         "name": get_cell(row, col, "name") or code,
         "signal": frontend_signal(category, badges, score, mode),
         "score": score,
-        "note": build_note(row, col, mode),
+        "note": build_note(row, col, mode, defaults),
         "mode": mode,
         "market": get_cell(row, col, "market"),
         "industry": get_cell(row, col, "industry"),
         "price": parse_num(get_cell(row, col, "price")),
         "category": category,
         "badges": badges,
-        "market_light": get_cell(row, col, "market_light"),
+        "market_light": market_light,
         "tech_score": parse_num(get_cell(row, col, "tech_score")),
         "chips_score": parse_num(get_cell(row, col, "chips_score")),
         "vol_score": parse_num(get_cell(row, col, "vol_score")),
@@ -157,14 +188,12 @@ def read_sheet_rows(sh, sheet_name: str, mode: str) -> Tuple[List[Dict], Optiona
     if len(values) < 2:
         return [], sheet_name
 
-    headers = values[0]
-    col = build_col_map(headers)
-    if "code" not in col:
-        raise RuntimeError(f"無法解析 {sheet_name} 表頭：{headers}")
+    header_row_index, headers, col = find_header_row(values, sheet_name)
+    meta = extract_sheet_meta(values, header_row_index)
 
     stocks = []
-    for row in values[1:]:
-        stock = row_to_stock(row, col, mode)
+    for row in values[header_row_index + 1:]:
+        stock = row_to_stock(row, col, mode, meta)
         if stock:
             stocks.append(stock)
     return stocks, sheet_name
@@ -176,6 +205,9 @@ def read_optional_first_sheet(sh, sheet_names: List[str], mode: str) -> Tuple[Li
             return read_sheet_rows(sh, sheet_name, mode)
         except gspread.exceptions.WorksheetNotFound:
             continue
+        except RuntimeError as exc:
+            print(f"Warning: {exc}")
+            return [], sheet_name
     return [], None
 
 
