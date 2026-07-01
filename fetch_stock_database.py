@@ -85,8 +85,13 @@ def is_blocked_response(text: str) -> bool:
     return stripped.startswith("<") or "安全性考量" in stripped
 
 
-def fetch_with_retry(url: str, label: str):
-    """抓取原始文字內容，若被擋（回應 HTML）則重試，回傳 None 代表最終失敗。"""
+def fetch_with_retry(url: str, label: str, force_utf8: bool = False):
+    """抓取原始文字內容，若被擋（回應 HTML）則重試，回傳 None 代表最終失敗。
+
+    force_utf8: TWSE 的 CSV 端點會回傳帶 UTF-8 BOM 的內容，但 requests
+                有時會依 Content-Type 猜成其他編碼，導致中文變亂碼。
+                設為 True 時強制用 utf-8-sig 解碼（sig 會自動處理 BOM）。
+    """
     for attempt in range(1, MAX_RETRIES + 1):
         try:
             res = requests.get(url, headers=HEADERS, timeout=30)
@@ -97,7 +102,11 @@ def fetch_with_retry(url: str, label: str):
                 time.sleep(RETRY_SLEEP_SECONDS)
                 continue
 
-            text = res.text
+            if force_utf8:
+                text = res.content.decode("utf-8-sig", errors="replace")
+            else:
+                text = res.text
+
             if is_blocked_response(text):
                 snippet = text.strip()[:150].replace("\n", " ")
                 print(f"[{label}] 回應被安全機制擋下: {snippet}")
@@ -164,7 +173,7 @@ def parse_twse_json(text: str):
 
 def fetch_twse_list():
     """先試 CSV 端點，失敗再試 JSON 端點。"""
-    text = fetch_with_retry(TWSE_CSV_URL, "上市-CSV")
+    text = fetch_with_retry(TWSE_CSV_URL, "上市-CSV", force_utf8=True)
     if text:
         rows = parse_twse_csv(text)
         if rows:
