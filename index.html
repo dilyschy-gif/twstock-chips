@@ -109,6 +109,24 @@
     </section>
   </main>
 
+  <section id="chartModal" class="chart-modal" aria-hidden="true">
+    <div class="chart-dialog" role="dialog" aria-modal="true" aria-labelledby="chartTitle">
+      <div class="chart-header">
+        <div>
+          <h2 id="chartTitle">K 線圖</h2>
+          <p id="chartSubtitle">近 60 日 K 線 · MA5 · MA20 · N 理論區間</p>
+        </div>
+        <button id="chartCloseBtn" type="button" class="icon-button" aria-label="關閉圖表">×</button>
+      </div>
+      <div id="chartStatus" class="chart-status">讀取 K 線資料中...</div>
+      <div class="chart-canvas-wrap">
+        <canvas id="chartCanvas" width="1040" height="520"></canvas>
+        <div id="chartTooltip" class="chart-tooltip" hidden></div>
+      </div>
+      <div id="chartStats" class="chart-stats"></div>
+    </div>
+  </section>
+
   <script src="app.js"></script>
 </body>
 </html>
