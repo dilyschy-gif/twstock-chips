@@ -6,13 +6,33 @@ const demoStocks = [
   { code: "2881", name: "富邦金", signal: "watch", score: 68, note: "金融股穩定，等待量能放大" }
 ];
 
-let stocks = [...demoStocks];
+let datasets = {
+  main: [...demoStocks],
+  contrarian: []
+};
+let currentMode = "main";
 let dataSource = "Demo";
+let datasetMeta = {};
 
 const signalLabel = {
   strong: "強勢",
   watch: "觀察",
   risk: "風險"
+};
+
+const modeCopy = {
+  main: {
+    title: "主升段掃描結果",
+    eyebrow: "Main Scan",
+    sideTitle: "主升段邏輯",
+    notes: ["法人買超是門檻。", "N 字突破與波段新高是進場核心。", "技術分、籌碼分、量能分一起排序。"]
+  },
+  contrarian: {
+    title: "逆勢抗跌掃描結果",
+    eyebrow: "Contrarian Scan",
+    sideTitle: "逆勢抗跌邏輯",
+    notes: ["依大盤燈號調整門檻。", "市場弱勢時提高個股篩選標準。", "優先找相對強、籌碼穩、止跌轉強標的。"]
+  }
 };
 
 const elements = {
@@ -27,7 +47,13 @@ const elements = {
   watchCount: document.getElementById("watchCount"),
   dataSource: document.getElementById("dataSource"),
   lastUpdated: document.getElementById("lastUpdated"),
-  stockRows: document.getElementById("stockRows")
+  stockRows: document.getElementById("stockRows"),
+  mainModeBtn: document.getElementById("mainModeBtn"),
+  contrarianModeBtn: document.getElementById("contrarianModeBtn"),
+  resultEyebrow: document.getElementById("resultEyebrow"),
+  resultTitle: document.getElementById("resultTitle"),
+  sideTitle: document.getElementById("sideTitle"),
+  sideNotes: document.getElementById("sideNotes")
 };
 
 function normalizeStock(item) {
@@ -35,9 +61,14 @@ function normalizeStock(item) {
     code: String(item.code ?? item.stock_id ?? "").trim(),
     name: String(item.name ?? item.stock_name ?? "未命名").trim(),
     signal: ["strong", "watch", "risk"].includes(item.signal) ? item.signal : "watch",
-    score: Number(item.score ?? item.chip_score ?? 0),
-    note: String(item.note ?? item.reason ?? "").trim()
+    score: Number(item.score ?? item.chip_score ?? item.totalScore ?? 0),
+    note: String(item.note ?? item.reason ?? item.badges ?? "").trim(),
+    marketLight: String(item.market_light ?? item.marketLight ?? "").trim()
   };
+}
+
+function activeStocks() {
+  return datasets[currentMode] || [];
 }
 
 function setStatus(title, detail) {
@@ -45,26 +76,44 @@ function setStatus(title, detail) {
   elements.runtimeDetail.textContent = detail;
 }
 
+function setMode(mode) {
+  currentMode = mode;
+  elements.mainModeBtn.classList.toggle("active", mode === "main");
+  elements.contrarianModeBtn.classList.toggle("active", mode === "contrarian");
+  render();
+}
+
 function getFilteredStocks() {
   const keyword = elements.stockSearch.value.trim().toLowerCase();
   const signal = elements.signalFilter.value;
 
-  return stocks.filter((stock) => {
+  return activeStocks().filter((stock) => {
     const matchesKeyword = !keyword || stock.code.toLowerCase().includes(keyword) || stock.name.toLowerCase().includes(keyword);
     const matchesSignal = signal === "all" || stock.signal === signal;
     return matchesKeyword && matchesSignal;
   });
 }
 
+function renderModeText() {
+  const copy = modeCopy[currentMode];
+  const meta = datasetMeta[currentMode] || {};
+  elements.resultEyebrow.textContent = copy.eyebrow;
+  elements.resultTitle.textContent = copy.title;
+  elements.sideTitle.textContent = copy.sideTitle;
+  elements.sideNotes.innerHTML = copy.notes.map((item) => "<li>" + escapeHtml(item) + "</li>").join("");
+  elements.dataSource.textContent = meta.sheet_tab || dataSource;
+}
+
 function render() {
   const filteredStocks = getFilteredStocks();
+  const stocks = activeStocks();
   const strongCount = stocks.filter((stock) => stock.signal === "strong").length;
   const watchCount = stocks.filter((stock) => stock.signal === "watch").length;
 
+  renderModeText();
   elements.totalCount.textContent = String(stocks.length);
   elements.strongCount.textContent = String(strongCount);
   elements.watchCount.textContent = String(watchCount);
-  elements.dataSource.textContent = dataSource;
   elements.lastUpdated.textContent = new Date().toLocaleString("zh-TW", { hour12: false });
 
   if (filteredStocks.length === 0) {
@@ -73,12 +122,13 @@ function render() {
   }
 
   elements.stockRows.innerHTML = filteredStocks.map((stock) => {
+    const note = stock.marketLight ? "[" + stock.marketLight + "] " + stock.note : stock.note;
     return '<tr>' +
       '<td><strong>' + escapeHtml(stock.code) + '</strong></td>' +
       '<td>' + escapeHtml(stock.name) + '</td>' +
       '<td><span class="badge ' + stock.signal + '">' + signalLabel[stock.signal] + '</span></td>' +
       '<td>' + (Number.isFinite(stock.score) ? stock.score : 0) + '</td>' +
-      '<td>' + escapeHtml(stock.note || "-") + '</td>' +
+      '<td>' + escapeHtml(note || "-") + '</td>' +
     '</tr>';
   }).join("");
 }
@@ -102,18 +152,26 @@ async function loadJsonData() {
     }
 
     const payload = await response.json();
-    const rows = Array.isArray(payload) ? payload : payload.stocks;
-    if (!Array.isArray(rows)) {
-      throw new Error("data.json 格式需要是陣列，或包含 stocks 陣列");
+    const mainRows = Array.isArray(payload) ? payload : payload.stocks;
+    const contrarianRows = Array.isArray(payload.contrarian_stocks) ? payload.contrarian_stocks : [];
+    if (!Array.isArray(mainRows)) {
+      throw new Error("data.json 格式需要包含 stocks 陣列");
     }
 
-    stocks = rows.map(normalizeStock).filter((stock) => stock.code);
-    dataSource = payload.source || payload.sheet_tab || "data.json";
+    datasets = {
+      main: mainRows.map(normalizeStock).filter((stock) => stock.code),
+      contrarian: contrarianRows.map(normalizeStock).filter((stock) => stock.code)
+    };
+    datasetMeta = payload.datasets || {
+      main: { sheet_tab: payload.sheet_tab || "選股結果" },
+      contrarian: { sheet_tab: payload.contrarian_sheet_tab || "逆勢抗跌" }
+    };
+    dataSource = payload.source || "data.json";
     render();
-    setStatus("資料已更新", "已載入 " + stocks.length + " 筆股票資料");
+    setStatus("資料已更新", "主升段 " + datasets.main.length + " 筆；逆勢抗跌 " + datasets.contrarian.length + " 筆");
   } catch (error) {
     dataSource = "Demo";
-    stocks = [...demoStocks];
+    datasets = { main: [...demoStocks], contrarian: [] };
     render();
     setStatus("使用示範資料", error.message);
   }
@@ -122,9 +180,11 @@ async function loadJsonData() {
 function runFrontendProgram() {
   const filteredCount = getFilteredStocks().length;
   render();
-  setStatus("前端程式已執行", "目前顯示 " + filteredCount + " 筆符合條件的股票");
+  setStatus("篩選已套用", "目前顯示 " + filteredCount + " 筆符合條件的股票");
 }
 
+elements.mainModeBtn.addEventListener("click", () => setMode("main"));
+elements.contrarianModeBtn.addEventListener("click", () => setMode("contrarian"));
 elements.runBtn.addEventListener("click", runFrontendProgram);
 elements.loadBtn.addEventListener("click", loadJsonData);
 elements.stockSearch.addEventListener("input", render);
