@@ -12,7 +12,7 @@
       <div>
         <p class="eyebrow">Cloudflare Pages Frontend</p>
         <h1>台股籌碼掃描面板</h1>
-        <p class="lead">這個頁面會在瀏覽器執行 JavaScript。Python 掃描結果之後可以輸出成 data.json，再由這個前端讀取與顯示。</p>
+        <p class="lead">顯示 Google Sheet 匯出的主升段與逆勢抗跌掃描結果。資料由 GitHub Actions 轉成 data.json，再由 Cloudflare Pages 發佈。</p>
       </div>
       <div class="status-card" aria-live="polite">
         <span class="status-dot"></span>
@@ -21,6 +21,11 @@
           <small id="runtimeDetail">等待操作</small>
         </div>
       </div>
+    </section>
+
+    <section class="mode-switch" aria-label="掃描模式">
+      <button id="mainModeBtn" type="button" class="mode-button active" data-mode="main">主升段掃描</button>
+      <button id="contrarianModeBtn" type="button" class="mode-button" data-mode="contrarian">逆勢抗跌掃描</button>
     </section>
 
     <section class="toolbar" aria-label="查詢工具列">
@@ -37,8 +42,8 @@
           <option value="risk">風險</option>
         </select>
       </label>
-      <button id="runBtn" type="button">執行前端程式</button>
-      <button id="loadBtn" type="button" class="secondary">讀取 data.json</button>
+      <button id="runBtn" type="button">重新套用篩選</button>
+      <button id="loadBtn" type="button" class="secondary">重新讀取 data.json</button>
     </section>
 
     <section class="summary-grid" aria-label="摘要">
@@ -64,8 +69,8 @@
       <article class="panel">
         <div class="panel-header">
           <div>
-            <p class="eyebrow">Results</p>
-            <h2>掃描結果</h2>
+            <p class="eyebrow" id="resultEyebrow">Results</p>
+            <h2 id="resultTitle">掃描結果</h2>
           </div>
           <span id="lastUpdated">尚未更新</span>
         </div>
@@ -76,7 +81,7 @@
                 <th>代號</th>
                 <th>名稱</th>
                 <th>訊號</th>
-                <th>籌碼分數</th>
+                <th>分數</th>
                 <th>備註</th>
               </tr>
             </thead>
@@ -86,14 +91,14 @@
       </article>
 
       <aside class="panel side-panel">
-        <p class="eyebrow">Next Step</p>
-        <h2>Python 如何接上</h2>
-        <ol>
-          <li>讓 Python 定時產生 data.json。</li>
-          <li>把 data.json 一起推到 GitHub。</li>
-          <li>前端按「讀取 data.json」就能顯示真實結果。</li>
+        <p class="eyebrow" id="sideEyebrow">Data Flow</p>
+        <h2 id="sideTitle">Google Sheet 已接上</h2>
+        <ol id="sideNotes">
+          <li>GitHub Actions 讀取 Google Sheet。</li>
+          <li>匯出主升段與逆勢抗跌資料到 data.json。</li>
+          <li>Cloudflare Pages 自動更新前端。</li>
         </ol>
-        <div class="mini-chart" aria-label="籌碼分數示意圖">
+        <div class="mini-chart" aria-label="分數示意圖">
           <span style="height: 45%"></span>
           <span style="height: 72%"></span>
           <span style="height: 56%"></span>
