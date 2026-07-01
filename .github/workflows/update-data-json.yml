@@ -1,0 +1,60 @@
+name: Update Cloudflare Pages data
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_main_scan:
+        description: "Run main_stock_scanner.py before exporting data.json"
+        required: true
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+  schedule:
+    # 17:00 Asia/Taipei, Monday-Friday. Official daily market data is usually available after market close.
+    - cron: "0 9 * * 1-5"
+
+permissions:
+  contents: write
+
+jobs:
+  update-data-json:
+    runs-on: ubuntu-latest
+    env:
+      GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+      GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+      FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install gspread google-auth requests
+
+      - name: Run main stock scanner
+        if: ${{ github.event_name == 'schedule' || inputs.run_main_scan == 'true' }}
+        run: python main_stock_scanner.py
+
+      - name: Export Google Sheet results to data.json
+        run: python export_sheet_to_data_json.py
+
+      - name: Commit updated data.json
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data.json
+          if git diff --staged --quiet; then
+            echo "No data.json changes to commit."
+          else
+            git commit -m "Update frontend data from Google Sheet"
+            git push
+          fi
