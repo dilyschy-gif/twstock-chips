@@ -1,26 +1,33 @@
 # -*- coding: utf-8 -*-
 """
-fetch_stock_database.py
+fetch_stock_database.py — v2
 建立/更新「股票資料庫」分頁（上市 + 上櫃公司清單）
 
-背景：
-  原本用 GAS（Google Apps Script）呼叫 TWSE OpenAPI 建立這份清單，
-  但 TWSE 的安全防護（WAF）會擋掉來自 Google Cloud IP 的請求，
-  回應「因為安全性考量，您所執行的頁面無法呈現」的 HTML 頁面。
-  改用 GitHub Actions（不同 IP 範圍）執行本腳本，避開封鎖。
+v2 改動：
+  openapi.twse.com.tw 這個網址會被 TWSE 的安全防護（WAF）擋掉
+  雲端資料中心的 IP（測試過 Google Cloud 和 GitHub Actions/Azure
+  兩種不同來源都被擋，判斷是廣泛封鎖資料中心 IP，非針對特定廠商）。
+  改用 mopsfin.twse.com.tw 這個不同子網域的 CSV 端點作為主要來源，
+  原 openapi 端點保留作為次要備援（萬一哪天 mopsfin 也被納入封鎖範圍）。
 
 資料來源：
-  上市：TWSE OpenAPI - https://openapi.twse.com.tw/v1/opendata/t187ap03_L
-  上櫃：TPEX OpenAPI  - https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap03_O
+  上市（主要）：mopsfin.twse.com.tw CSV
+    https://mopsfin.twse.com.tw/opendata/t187ap03_L.csv
+  上市（備援）：TWSE OpenAPI JSON
+    https://openapi.twse.com.tw/v1/opendata/t187ap03_L
+  上櫃：TPEX OpenAPI
+    https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap03_O
 
 執行環境：GitHub Actions
-建議排程：每週一次即可（公司清單不會每天變動），或改版當天手動觸發
+建議排程：每週一次即可（公司清單不會每天變動）
 
 必要環境變數：
 - GOOGLE_SHEET_ID
 - GOOGLE_CREDENTIALS  # service account JSON 字串
 """
 
+import csv
+import io
 import json
 import os
 import time
@@ -37,12 +44,16 @@ SCOPES = [
 SHEET_ID = os.environ.get("GOOGLE_SHEET_ID", "")
 SHEET_STOCK_DB = "股票資料庫"
 
-TWSE_URL = "https://openapi.twse.com.tw/v1/opendata/t187ap03_L"
+# 上市：主要 CSV 端點 + 備援 JSON 端點
+TWSE_CSV_URL = "https://mopsfin.twse.com.tw/opendata/t187ap03_L.csv"
+TWSE_JSON_URL = "https://openapi.twse.com.tw/v1/opendata/t187ap03_L"
+
+# 上櫃
 TPEX_URL = "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap03_O"
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
-    "Accept": "application/json",
+    "Accept": "text/csv,application/json,*/*",
 }
 
 MAX_RETRIES = 3
@@ -68,44 +79,74 @@ def safe_text(v) -> str:
     return str(v).strip() if v is not None else ""
 
 
-def fetch_json_with_retry(url: str, label: str):
-    """抓取 JSON，若拿到 HTML（代表被 WAF 擋下）視為失敗並重試。"""
+def is_blocked_response(text: str) -> bool:
+    """判斷回應是不是被 WAF 擋下的 HTML 頁面，而不是真正的資料。"""
+    stripped = text.strip()
+    return stripped.startswith("<") or "安全性考量" in stripped
+
+
+def fetch_with_retry(url: str, label: str):
+    """抓取原始文字內容，若被擋（回應 HTML）則重試，回傳 None 代表最終失敗。"""
     for attempt in range(1, MAX_RETRIES + 1):
         try:
             res = requests.get(url, headers=HEADERS, timeout=30)
             print(f"[{label}] 第 {attempt} 次嘗試，狀態碼: {res.status_code}")
-
-            text = res.text.strip()
-            if text.startswith("<"):
-                # 被 WAF 擋下會回傳 HTML 錯誤頁，不是 JSON
-                snippet = text[:150].replace("\n", " ")
-                print(f"[{label}] 回應不是 JSON（可能被安全機制擋下): {snippet}")
-                time.sleep(RETRY_SLEEP_SECONDS)
-                continue
 
             if res.status_code != 200:
                 print(f"[{label}] 回應碼異常: {res.status_code}")
                 time.sleep(RETRY_SLEEP_SECONDS)
                 continue
 
-            data = res.json()
-            print(f"[{label}] ✅ 成功取得 {len(data)} 筆")
-            return data
+            text = res.text
+            if is_blocked_response(text):
+                snippet = text.strip()[:150].replace("\n", " ")
+                print(f"[{label}] 回應被安全機制擋下: {snippet}")
+                time.sleep(RETRY_SLEEP_SECONDS)
+                continue
+
+            print(f"[{label}] ✅ 成功取得回應（{len(text)} 字元）")
+            return text
 
         except requests.exceptions.RequestException as e:
             print(f"[{label}] 第 {attempt} 次嘗試發生例外: {e}")
-            time.sleep(RETRY_SLEEP_SECONDS)
-        except json.JSONDecodeError as e:
-            print(f"[{label}] 第 {attempt} 次嘗試 JSON 解析失敗: {e}")
             time.sleep(RETRY_SLEEP_SECONDS)
 
     print(f"[{label}] ❌ 三次嘗試均失敗")
     return None
 
 
-def fetch_twse_list():
-    data = fetch_json_with_retry(TWSE_URL, "上市")
-    if not data:
+def parse_twse_csv(text: str):
+    """解析 mopsfin CSV 格式，回傳 [市場, 代號, 名稱, 產業別] 列表。"""
+    reader = csv.reader(io.StringIO(text))
+    rows_raw = list(reader)
+    if not rows_raw:
+        return []
+
+    header = rows_raw[0]
+    try:
+        code_idx = header.index("公司代號")
+        name_idx = header.index("公司簡稱")
+        industry_idx = header.index("產業別")
+    except ValueError as e:
+        print(f"[上市CSV] 表頭解析失敗: {e}，表頭內容：{header}")
+        return []
+
+    rows = []
+    for r in rows_raw[1:]:
+        if len(r) <= max(code_idx, name_idx, industry_idx):
+            continue
+        code = safe_text(r[code_idx])
+        if len(code) == 4 and code.isdigit():
+            rows.append(["上市", code, safe_text(r[name_idx]), safe_text(r[industry_idx])])
+    return rows
+
+
+def parse_twse_json(text: str):
+    """解析 openapi JSON 格式（備援用），回傳同樣格式。"""
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as e:
+        print(f"[上市JSON備援] JSON 解析失敗: {e}")
         return []
 
     rows = []
@@ -121,9 +162,32 @@ def fetch_twse_list():
     return rows
 
 
+def fetch_twse_list():
+    """先試 CSV 端點，失敗再試 JSON 端點。"""
+    text = fetch_with_retry(TWSE_CSV_URL, "上市-CSV")
+    if text:
+        rows = parse_twse_csv(text)
+        if rows:
+            return rows
+        print("[上市-CSV] 解析成功但沒有取得任何資料列，改嘗試備援端點")
+
+    print("\n[上市] CSV 端點失敗，改嘗試備援 JSON 端點...")
+    text = fetch_with_retry(TWSE_JSON_URL, "上市-JSON備援")
+    if text:
+        return parse_twse_json(text)
+
+    return []
+
+
 def fetch_tpex_list():
-    data = fetch_json_with_retry(TPEX_URL, "上櫃")
-    if not data:
+    text = fetch_with_retry(TPEX_URL, "上櫃")
+    if not text:
+        return []
+
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as e:
+        print(f"[上櫃] JSON 解析失敗: {e}")
         return []
 
     rows = []
@@ -167,7 +231,7 @@ def write_stock_database(sh, twse_rows, tpex_rows):
 
 def main():
     print("=" * 60)
-    print("股票資料庫建立/更新開始（Python / GitHub Actions 版）")
+    print("股票資料庫建立/更新開始（Python / GitHub Actions 版 v2）")
     print("=" * 60)
 
     gc = get_gspread_client()
@@ -185,7 +249,8 @@ def main():
         return
 
     if not twse_rows:
-        print("\n⚠️ 上市清單抓取失敗，僅上櫃成功。為避免覆蓋成不完整清單，本次不寫入，請稍後重跑。")
+        print("\n⚠️ 上市清單抓取失敗（CSV 與 JSON 備援皆失敗），僅上櫃成功。"
+              "為避免覆蓋成不完整清單，本次不寫入，請稍後重跑。")
         return
 
     if not tpex_rows:
