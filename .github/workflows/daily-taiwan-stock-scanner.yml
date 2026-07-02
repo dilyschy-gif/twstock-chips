@@ -1,0 +1,36 @@
+name: Daily Taiwan Stock Scanner
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 17:00 Asia/Taipei, Monday-Friday.
+    # This is the first Python job in the daily update sequence.
+    - cron: "0 9 * * 1-5"
+
+permissions:
+  contents: read
+
+jobs:
+  daily-taiwan-stock-scanner:
+    runs-on: ubuntu-latest
+    env:
+      GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+      GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+      FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install gspread google-auth requests
+
+      - name: Run Daily Taiwan Stock Scanner
+        run: python main_stock_scanner.py
