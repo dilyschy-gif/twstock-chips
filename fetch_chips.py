@@ -240,19 +240,31 @@ def prune_old_data(sheet):
     if len(dates) <= HISTORY_DAYS:
         return
 
-    # 找出需要刪除的截止日期
     cutoff = dates[HISTORY_DAYS - 1]
     rows_to_delete = []
     for i, row in enumerate(all_values[1:], start=2):
         if row[0] and row[0] < cutoff:
             rows_to_delete.append(i)
 
-    # 從最後一列往上刪（避免索引位移）
-    for row_num in reversed(rows_to_delete):
-        sheet.delete_rows(row_num)
+    if not rows_to_delete:
+        return
 
-    if rows_to_delete:
-        print(f"清理舊資料：刪除 {len(rows_to_delete)} 列（{cutoff} 之前）")
+    # Batch contiguous row deletions to avoid Google Sheets write quota errors.
+    ranges = []
+    start = prev = rows_to_delete[0]
+    for row_num in rows_to_delete[1:]:
+        if row_num == prev + 1:
+            prev = row_num
+            continue
+        ranges.append((start, prev))
+        start = prev = row_num
+    ranges.append((start, prev))
+
+    for start, end in reversed(ranges):
+        sheet.delete_rows(start, end)
+        time.sleep(1)
+
+    print(f"清理舊資料：刪除 {len(rows_to_delete)} 列（{cutoff} 之前）")
 
 # ══════════ 主程式 ══════════
 def main():
