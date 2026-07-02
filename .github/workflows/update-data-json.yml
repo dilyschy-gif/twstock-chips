@@ -4,16 +4,17 @@ on:
   workflow_dispatch:
     inputs:
       run_main_scan:
-        description: "Run main_stock_scanner.py before exporting data.json"
+        description: "Run main_stock_scanner.py before exporting data.json (manual runs only)"
         required: true
-        default: "true"
+        default: "false"
         type: choice
         options:
-          - "true"
           - "false"
+          - "true"
   schedule:
-    # 17:00 Asia/Taipei, Monday-Friday. Official daily market data is usually available after market close.
-    - cron: "0 9 * * 1-5"
+    # 17:20 Asia/Taipei, Monday-Friday.
+    # Runs 20 minutes after Daily Taiwan Stock Scanner.
+    - cron: "20 9 * * 1-5"
 
 permissions:
   contents: write
@@ -40,8 +41,8 @@ jobs:
           python -m pip install --upgrade pip
           pip install gspread google-auth requests
 
-      - name: Run main stock scanner
-        if: ${{ github.event_name == 'schedule' || inputs.run_main_scan == 'true' }}
+      - name: Run main stock scanner for manual full refresh
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_main_scan == 'true' }}
         run: python main_stock_scanner.py
 
       - name: Export Google Sheet results to data.json
