@@ -6,6 +6,7 @@
   <title>TW Stock Chips</title>
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="chart-controls.css">
+  <link rel="stylesheet" href="market-widget.css">
 </head>
 <body>
   <main class="app-shell">
@@ -22,6 +23,29 @@
           <small id="runtimeDetail">等待操作</small>
         </div>
       </div>
+    </section>
+
+    <section class="market-overview" aria-label="總體環境">
+      <div class="market-overview-header">
+        <div>
+          <p class="eyebrow">Macro Watch</p>
+          <h2>總體環境</h2>
+        </div>
+        <span id="marketUpdated">讀取中</span>
+      </div>
+      <div class="market-metrics">
+        <article class="market-metric">
+          <span>台幣 / USD</span>
+          <strong id="usdTwdValue">--</strong>
+          <small id="usdTwdChange">--</small>
+        </article>
+        <article class="market-metric">
+          <span>台灣加權指數</span>
+          <strong id="twiiValue">--</strong>
+          <small id="twiiChange">--</small>
+        </article>
+      </div>
+      <p id="marketMessage" class="market-message">正在讀取匯率與指數...</p>
     </section>
 
     <section class="mode-switch" aria-label="掃描模式">
@@ -134,5 +158,6 @@
   </section>
 
   <script src="app.js"></script>
+  <script src="market-widget.js"></script>
 </body>
 </html>
