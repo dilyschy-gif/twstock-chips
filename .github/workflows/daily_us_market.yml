@@ -2,7 +2,8 @@ name: 每日美股連動資料更新
 
 on:
   schedule:
-    - cron: '20 10 * * 1-5'
+    # 18:00 Asia/Taipei, Monday-Friday.
+    - cron: '0 10 * * 1-5'
 
   workflow_dispatch:
 
