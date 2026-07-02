@@ -5,6 +5,9 @@ on:
     # 18:20 Asia/Taipei, Monday-Friday.
     - cron: '20 10 * * 1-5'
   workflow_dispatch:
+  push:
+    paths:
+      - contrarian-refresh-trigger.txt
 
 jobs:
   fetch-contrarian:
