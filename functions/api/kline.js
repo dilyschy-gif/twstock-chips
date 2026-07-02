@@ -7,6 +7,7 @@ export async function onRequestGet({ request }) {
   const url = new URL(request.url);
   const code = sanitizeCode(url.searchParams.get("code"));
   const market = (url.searchParams.get("market") || "").trim();
+  const days = sanitizeDays(url.searchParams.get("days"));
 
   if (!code) {
     return jsonResponse({ error: "缺少股票代號" }, 400);
@@ -19,7 +20,7 @@ export async function onRequestGet({ request }) {
     try {
       const candles = await fetchYahooCandles(symbol);
       if (candles.length >= 20) {
-        return jsonResponse({ code, symbol, candles: candles.slice(-60) });
+        return jsonResponse({ code, symbol, days, candles: candles.slice(-days) });
       }
       lastError = `${symbol} K 線資料不足`;
     } catch (error) {
@@ -34,6 +35,11 @@ function sanitizeCode(value) {
   const text = String(value || "").trim().toUpperCase();
   const match = text.match(/^[0-9A-Z]{2,8}$/);
   return match ? text : "";
+}
+
+function sanitizeDays(value) {
+  const days = Number(value || 60);
+  return [60, 120, 180].includes(days) ? days : 60;
 }
 
 function buildCandidateSymbols(code, market) {
@@ -55,7 +61,7 @@ function buildCandidateSymbols(code, market) {
 }
 
 async function fetchYahooCandles(symbol) {
-  const endpoint = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=4mo&interval=1d&events=history&includeAdjustedClose=true`;
+  const endpoint = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=1y&interval=1d&events=history&includeAdjustedClose=true`;
   const response = await fetch(endpoint, {
     headers: {
       "accept": "application/json",
