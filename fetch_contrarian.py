@@ -19,6 +19,7 @@ SHEET_OUTPUT = "逆勢抗跌掃描"
 
 MIN_VOLUME_LOTS = 300
 OBSERVE_THRESHOLD = 30
+TAIPEI_TZ = datetime.timezone(datetime.timedelta(hours=8))
 
 
 def get_gspread_client():
@@ -52,6 +53,10 @@ def parse_num(v):
 
 def safe_text(v):
     return str(v).strip() if v is not None else ""
+
+
+def taipei_now():
+    return datetime.datetime.now(TAIPEI_TZ)
 
 
 def fetch_market_index_change():
@@ -403,7 +408,7 @@ def write_results(gc, formal_list, watch_list, light, change_pct, change_pts, th
         ws = sh.add_worksheet(title=SHEET_OUTPUT, rows=500, cols=20)
 
     ws.clear()
-    now = datetime.datetime.now().strftime("%Y/%m/%d %H:%M")
+    now = taipei_now().strftime("%Y/%m/%d %H:%M")
 
     ws.update(
         range_name="A1",
