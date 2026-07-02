@@ -12,9 +12,9 @@ on:
           - "false"
           - "true"
   schedule:
-    # 17:20 Asia/Taipei, Monday-Friday.
-    # Runs 20 minutes after Daily Taiwan Stock Scanner.
-    - cron: "20 9 * * 1-5"
+    # 18:40 Asia/Taipei, Monday-Friday.
+    # Runs after chips, main scan, volume, US market, and contrarian scan.
+    - cron: "40 10 * * 1-5"
 
 permissions:
   contents: write
