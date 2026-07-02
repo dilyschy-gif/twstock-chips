@@ -6,20 +6,24 @@ const demoStocks = [
   { code: "2881", name: "富邦金", signal: "watch", score: 68, note: "金融股穩定，等待量能放大", market: "上市" }
 ];
 
-let datasets = {
-  main: [...demoStocks],
-  contrarian: []
-};
+let datasets = { main: [...demoStocks], contrarian: [] };
 let currentMode = "main";
 let dataSource = "Demo";
 let datasetMeta = {};
 let chartState = null;
+let chartRangeDays = 60;
 
-const signalLabel = {
-  strong: "強勢",
-  watch: "觀察",
-  risk: "風險"
+const chartColors = {
+  up: "#dc2626",
+  down: "#047857",
+  ma5: "#f97316",
+  ma20: "#2563eb",
+  neckline: "#8b5cf6",
+  support: "#0f766e",
+  target: "#b45309"
 };
+
+const signalLabel = { strong: "強勢", watch: "觀察", risk: "風險" };
 
 const modeCopy = {
   main: {
@@ -62,7 +66,8 @@ const elements = {
   chartStatus: document.getElementById("chartStatus"),
   chartCanvas: document.getElementById("chartCanvas"),
   chartTooltip: document.getElementById("chartTooltip"),
-  chartStats: document.getElementById("chartStats")
+  chartStats: document.getElementById("chartStats"),
+  chartRangeButtons: Array.from(document.querySelectorAll(".chart-range-button"))
 };
 
 function normalizeStock(item) {
@@ -96,7 +101,6 @@ function setMode(mode) {
 function getFilteredStocks() {
   const keyword = elements.stockSearch.value.trim().toLowerCase();
   const signal = elements.signalFilter.value;
-
   return activeStocks().filter((stock) => {
     const matchesKeyword = !keyword || stock.code.toLowerCase().includes(keyword) || stock.name.toLowerCase().includes(keyword);
     const matchesSignal = signal === "all" || stock.signal === signal;
@@ -133,7 +137,7 @@ function render() {
 
   elements.stockRows.innerHTML = filteredStocks.map((stock) => {
     const note = stock.marketLight ? "[" + stock.marketLight + "] " + stock.note : stock.note;
-    return '<tr class="stock-row" data-code="' + escapeHtml(stock.code) + '" tabindex="0" title="點擊查看近 60 日 K 線圖">' +
+    return '<tr class="stock-row" data-code="' + escapeHtml(stock.code) + '" tabindex="0" title="點擊查看 K 線圖">' +
       '<td><strong>' + escapeHtml(stock.code) + '</strong></td>' +
       '<td>' + escapeHtml(stock.name) + '</td>' +
       '<td><span class="badge ' + stock.signal + '">' + signalLabel[stock.signal] + '</span></td>' +
@@ -154,19 +158,13 @@ function escapeHtml(value) {
 
 async function loadJsonData() {
   setStatus("讀取資料中", "正在嘗試載入 data.json");
-
   try {
     const response = await fetch("data.json", { cache: "no-store" });
-    if (!response.ok) {
-      throw new Error("找不到 data.json");
-    }
-
+    if (!response.ok) throw new Error("找不到 data.json");
     const payload = await response.json();
     const mainRows = Array.isArray(payload) ? payload : payload.stocks;
     const contrarianRows = Array.isArray(payload.contrarian_stocks) ? payload.contrarian_stocks : [];
-    if (!Array.isArray(mainRows)) {
-      throw new Error("data.json 格式需要包含 stocks 陣列");
-    }
+    if (!Array.isArray(mainRows)) throw new Error("data.json 格式需要包含 stocks 陣列");
 
     datasets = {
       main: mainRows.map(normalizeStock).filter((stock) => stock.code),
@@ -198,11 +196,17 @@ function findStockByCode(code) {
 }
 
 async function openChart(stock) {
+  chartRangeDays = 60;
+  setRangeButtons();
   elements.chartModal.classList.add("open");
   elements.chartModal.setAttribute("aria-hidden", "false");
+  await loadChart(stock, chartRangeDays);
+}
+
+async function loadChart(stock, days) {
   elements.chartTitle.textContent = stock.name + "（" + stock.code + "）";
-  elements.chartSubtitle.textContent = "近 60 日 K 線 · MA5 · MA20 · 頸線 · N 理論價格區間";
-  elements.chartStatus.textContent = "讀取 K 線資料中...";
+  elements.chartSubtitle.textContent = "近 " + days + " 日 K 線 · MA5 · MA20 · 頸線 · N 理論價格區間";
+  elements.chartStatus.textContent = "讀取 " + days + " 日 K 線資料中...";
   elements.chartStatus.hidden = false;
   elements.chartStats.innerHTML = "";
   elements.chartTooltip.hidden = true;
@@ -210,7 +214,7 @@ async function openChart(stock) {
   clearChart();
 
   try {
-    const params = new URLSearchParams({ code: stock.code, market: stock.market || "" });
+    const params = new URLSearchParams({ code: stock.code, market: stock.market || "", days: String(days) });
     const response = await fetch("/api/kline?" + params.toString(), { cache: "no-store" });
     if (!response.ok) {
       const errorPayload = await response.json().catch(() => ({}));
@@ -227,14 +231,11 @@ async function openChart(stock) {
       volume: Number(item.volume || 0)
     })).filter((item) => Number.isFinite(item.close));
 
-    if (candles.length < 20) {
-      throw new Error("K 線資料不足，暫時無法畫出 60 日區間");
-    }
-
+    if (candles.length < 20) throw new Error("K 線資料不足，暫時無法畫出區間");
     const levels = calculateNTheoryLevels(candles);
-    chartState = { stock, candles, levels, hoverIndex: null, symbol: payload.symbol };
+    chartState = { stock, candles, levels, hoverIndex: null, symbol: payload.symbol, days };
     elements.chartStatus.hidden = true;
-    renderChartStats(stock, candles, levels, payload.symbol);
+    renderChartStats(stock, candles, levels, payload.symbol, days);
     drawChart();
     setStatus("K 線已載入", stock.code + " 近 " + candles.length + " 日資料");
   } catch (error) {
@@ -259,13 +260,12 @@ function calculateMovingAverage(candles, windowSize) {
   return candles.map((_, index) => {
     if (index + 1 < windowSize) return null;
     const slice = candles.slice(index + 1 - windowSize, index + 1);
-    const sum = slice.reduce((total, candle) => total + candle.close, 0);
-    return sum / windowSize;
+    return slice.reduce((total, candle) => total + candle.close, 0) / windowSize;
   });
 }
 
 function calculateNTheoryLevels(candles) {
-  const usable = candles.slice(-60);
+  const usable = candles;
   const firstLowLimit = Math.max(10, Math.floor(usable.length * 0.45));
   const pointAIndex = findExtremeIndex(usable.slice(0, firstLowLimit), "low");
   const afterA = usable.slice(pointAIndex + 1);
@@ -274,7 +274,6 @@ function calculateNTheoryLevels(candles) {
   const afterB = usable.slice(pointBIndex + 1);
   const pointCRelative = afterB.length ? findExtremeIndex(afterB, "low") : 0;
   const pointCIndex = afterB.length ? pointBIndex + 1 + pointCRelative : Math.max(pointBIndex - 1, pointAIndex);
-
   const pointA = usable[pointAIndex];
   const pointB = usable[pointBIndex];
   const pointC = usable[pointCIndex];
@@ -282,9 +281,6 @@ function calculateNTheoryLevels(candles) {
   const support = pointC.low;
   const waveHeight = Math.max(0, pointB.high - pointA.low);
   const target = pointC.low + waveHeight;
-  const entryLow = neckline * 0.985;
-  const entryHigh = neckline * 1.015;
-
   return {
     pointAIndex,
     pointBIndex,
@@ -292,13 +288,8 @@ function calculateNTheoryLevels(candles) {
     support,
     neckline,
     target,
-    entryLow,
-    entryHigh,
-    labels: {
-      support: "C 支撐",
-      neckline: "B 頸線",
-      target: "N 目標"
-    }
+    entryLow: neckline * 0.985,
+    entryHigh: neckline * 1.015
   };
 }
 
@@ -315,12 +306,12 @@ function findExtremeIndex(rows, field) {
   return bestIndex;
 }
 
-function renderChartStats(stock, candles, levels, symbol) {
+function renderChartStats(stock, candles, levels, symbol, days) {
   const latest = candles[candles.length - 1];
   const latestDate = formatDate(latest.date);
   const rangeText = "防守區 " + formatPrice(levels.support) + " - " + formatPrice(levels.neckline) + "；突破區 " + formatPrice(levels.entryLow) + " - " + formatPrice(levels.entryHigh) + "；N 目標 " + formatPrice(levels.target);
   elements.chartStats.innerHTML = [
-    '<span><strong>代號</strong>' + escapeHtml(stock.code) + ' · ' + escapeHtml(symbol || "") + '</span>',
+    '<span><strong>期間</strong>' + escapeHtml(String(days)) + ' 日 · ' + escapeHtml(symbol || "") + '</span>',
     '<span><strong>最新收盤</strong>' + escapeHtml(formatPrice(latest.close)) + '（' + escapeHtml(latestDate) + '）</span>',
     '<span><strong>頸線</strong>' + escapeHtml(formatPrice(levels.neckline)) + '</span>',
     '<span><strong>N 理論區間</strong>' + escapeHtml(rangeText) + '</span>'
@@ -329,7 +320,6 @@ function renderChartStats(stock, candles, levels, symbol) {
 
 function drawChart() {
   if (!chartState) return;
-
   const canvas = elements.chartCanvas;
   const ctx = canvas.getContext("2d");
   const dpr = window.devicePixelRatio || 1;
@@ -343,7 +333,7 @@ function drawChart() {
   const padding = { top: 28, right: 72, bottom: 44, left: 52 };
   const plotW = width - padding.left - padding.right;
   const plotH = height - padding.top - padding.bottom;
-  const candles = chartState.candles.slice(-60);
+  const candles = chartState.candles;
   const ma5 = calculateMovingAverage(candles, 5);
   const ma20 = calculateMovingAverage(candles, 20);
   const levels = chartState.levels;
@@ -353,18 +343,17 @@ function drawChart() {
   const padValue = Math.max((maxValue - minValue) * 0.12, maxValue * 0.01);
   const yMin = minValue - padValue;
   const yMax = maxValue + padValue;
-
   const xFor = (index) => padding.left + (plotW / Math.max(candles.length - 1, 1)) * index;
   const yFor = (value) => padding.top + ((yMax - value) / (yMax - yMin)) * plotH;
-  const candleW = Math.max(5, Math.min(14, plotW / candles.length * 0.55));
+  const candleW = Math.max(3, Math.min(14, plotW / candles.length * 0.55));
 
   ctx.clearRect(0, 0, width, height);
-  drawGrid(ctx, padding, width, height, plotW, plotH, yMin, yMax, yFor);
+  drawGrid(ctx, padding, width, plotW, plotH, yMin, yMax, yFor);
   drawZone(ctx, padding, plotW, yFor(levels.target), yFor(levels.neckline), "rgba(180, 83, 9, 0.10)");
   drawZone(ctx, padding, plotW, yFor(levels.neckline), yFor(levels.support), "rgba(15, 118, 110, 0.10)");
-  drawLevel(ctx, padding, plotW, yFor(levels.neckline), "#8b5cf6", "頸線 " + formatPrice(levels.neckline));
-  drawLevel(ctx, padding, plotW, yFor(levels.support), "#0f766e", "支撐 " + formatPrice(levels.support));
-  drawLevel(ctx, padding, plotW, yFor(levels.target), "#b45309", "N目標 " + formatPrice(levels.target));
+  drawLevel(ctx, padding, plotW, yFor(levels.neckline), chartColors.neckline, "頸線 " + formatPrice(levels.neckline));
+  drawLevel(ctx, padding, plotW, yFor(levels.support), chartColors.support, "支撐 " + formatPrice(levels.support));
+  drawLevel(ctx, padding, plotW, yFor(levels.target), chartColors.target, "N目標 " + formatPrice(levels.target));
 
   candles.forEach((candle, index) => {
     const x = xFor(index);
@@ -373,32 +362,27 @@ function drawChart() {
     const highY = yFor(candle.high);
     const lowY = yFor(candle.low);
     const isUp = candle.close >= candle.open;
-    ctx.strokeStyle = isUp ? "#047857" : "#dc2626";
-    ctx.fillStyle = isUp ? "#047857" : "#dc2626";
+    ctx.strokeStyle = isUp ? chartColors.up : chartColors.down;
+    ctx.fillStyle = isUp ? chartColors.up : chartColors.down;
     ctx.lineWidth = 1.4;
     ctx.beginPath();
     ctx.moveTo(x, highY);
     ctx.lineTo(x, lowY);
     ctx.stroke();
-    const bodyY = Math.min(openY, closeY);
-    const bodyH = Math.max(Math.abs(openY - closeY), 2);
-    ctx.fillRect(x - candleW / 2, bodyY, candleW, bodyH);
+    ctx.fillRect(x - candleW / 2, Math.min(openY, closeY), candleW, Math.max(Math.abs(openY - closeY), 2));
   });
 
-  drawLine(ctx, ma5, xFor, yFor, "#f97316", 2);
-  drawLine(ctx, ma20, xFor, yFor, "#2563eb", 2);
+  drawLine(ctx, ma5, xFor, yFor, chartColors.ma5, 2);
+  drawLine(ctx, ma20, xFor, yFor, chartColors.ma20, 2);
   drawSwingPoint(ctx, xFor(levels.pointAIndex), yFor(candles[levels.pointAIndex]?.low), "A");
   drawSwingPoint(ctx, xFor(levels.pointBIndex), yFor(candles[levels.pointBIndex]?.high), "B");
   drawSwingPoint(ctx, xFor(levels.pointCIndex), yFor(candles[levels.pointCIndex]?.low), "C");
   drawXAxis(ctx, candles, xFor, padding, height);
   drawLegend(ctx, padding, height);
-
-  if (chartState.hoverIndex !== null) {
-    drawHoverGuide(ctx, candles, chartState.hoverIndex, xFor, yFor, padding, plotH);
-  }
+  if (chartState.hoverIndex !== null) drawHoverGuide(ctx, candles, chartState.hoverIndex, xFor, yFor, padding, plotH);
 }
 
-function drawGrid(ctx, padding, width, height, plotW, plotH, yMin, yMax, yFor) {
+function drawGrid(ctx, padding, width, plotW, plotH, yMin, yMax, yFor) {
   ctx.strokeStyle = "#e5e7eb";
   ctx.fillStyle = "#667085";
   ctx.font = "12px Arial";
@@ -438,6 +422,7 @@ function drawLevel(ctx, padding, plotW, y, color, label) {
 }
 
 function drawLine(ctx, values, xFor, yFor, color, lineWidth) {
+  const firstValidIndex = values.findIndex((item) => item !== null);
   ctx.strokeStyle = color;
   ctx.lineWidth = lineWidth;
   ctx.beginPath();
@@ -445,7 +430,7 @@ function drawLine(ctx, values, xFor, yFor, color, lineWidth) {
     if (value === null) return;
     const x = xFor(index);
     const y = yFor(value);
-    if (index === values.findIndex((item) => item !== null)) ctx.moveTo(x, y);
+    if (index === firstValidIndex) ctx.moveTo(x, y);
     else ctx.lineTo(x, y);
   });
   ctx.stroke();
@@ -471,11 +456,11 @@ function drawXAxis(ctx, candles, xFor, padding, height) {
 
 function drawLegend(ctx, padding, height) {
   const items = [
-    ["漲K", "#047857"],
-    ["跌K", "#dc2626"],
-    ["MA5", "#f97316"],
-    ["MA20", "#2563eb"],
-    ["頸線", "#8b5cf6"]
+    ["漲K", chartColors.up],
+    ["跌K", chartColors.down],
+    ["MA5", chartColors.ma5],
+    ["MA20", chartColors.ma20],
+    ["頸線", chartColors.neckline]
   ];
   let x = padding.left;
   const y = height - 12;
@@ -508,7 +493,7 @@ function showChartTooltip(event) {
   if (!chartState) return;
   const canvas = elements.chartCanvas;
   const rect = canvas.getBoundingClientRect();
-  const candles = chartState.candles.slice(-60);
+  const candles = chartState.candles;
   const padding = { left: 52, right: 72 };
   const plotW = rect.width - padding.left - padding.right;
   const x = event.clientX - rect.left;
@@ -528,6 +513,12 @@ function hideChartTooltip() {
   chartState.hoverIndex = null;
   elements.chartTooltip.hidden = true;
   drawChart();
+}
+
+function setRangeButtons() {
+  elements.chartRangeButtons.forEach((button) => {
+    button.classList.toggle("active", Number(button.dataset.days) === chartRangeDays);
+  });
 }
 
 function formatPrice(value) {
@@ -559,6 +550,14 @@ elements.stockRows.addEventListener("keydown", (event) => {
   event.preventDefault();
   const stock = findStockByCode(row.dataset.code);
   if (stock) openChart(stock);
+});
+elements.chartRangeButtons.forEach((button) => {
+  button.addEventListener("click", async () => {
+    if (!chartState) return;
+    chartRangeDays = Number(button.dataset.days);
+    setRangeButtons();
+    await loadChart(chartState.stock, chartRangeDays);
+  });
 });
 elements.chartCloseBtn.addEventListener("click", closeChart);
 elements.chartModal.addEventListener("click", (event) => {
