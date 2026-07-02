@@ -2,8 +2,9 @@ name: Daily Taiwan Stock Scanner
 
 on:
   schedule:
-    # GitHub Actions uses UTC. 10:05 UTC = 18:05 Asia/Taipei.
-    - cron: '5 10 * * 1-5'
+    # GitHub Actions uses UTC. 09:20 UTC = 17:20 Asia/Taipei.
+    # Runs 20 minutes after 每日台股籌碼資料更新.
+    - cron: '20 9 * * 1-5'
   workflow_dispatch:
 
 jobs:
