@@ -11,6 +11,9 @@ on:
         options:
           - "false"
           - "true"
+  push:
+    paths:
+      - data-refresh-trigger.txt
   schedule:
     # 18:40 Asia/Taipei, Monday-Friday.
     # Runs after chips, main scan, volume, US market, and contrarian scan.
