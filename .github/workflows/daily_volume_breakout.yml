@@ -2,7 +2,8 @@ name: 每日爆量創新高訊號偵測
 
 on:
   schedule:
-    - cron: '10 10 * * 1-5'
+    # 17:40 Asia/Taipei, Monday-Friday.
+    - cron: '40 9 * * 1-5'
 
   workflow_dispatch:
 
