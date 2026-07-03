@@ -2,8 +2,9 @@ name: 每日台股籌碼資料更新
 
 on:
   schedule:
-    # 17:00 Asia/Taipei, Monday-Friday. First daily data job.
-    - cron: '0 9 * * 1-5'
+    # 08:35 UTC = 16:35 Asia/Taipei, Monday-Friday.
+    # Must finish before Daily Taiwan Stock Scanner at 17:00.
+    - cron: '35 8 * * 1-5'
 
   workflow_dispatch:
 
