@@ -14,10 +14,13 @@ on:
   push:
     paths:
       - data-refresh-trigger.txt
+  workflow_run:
+    workflows: ["Daily Taiwan Stock Scanner", "逆勢抗跌標的掃描"]
+    types: [completed]
   schedule:
-    # 18:40 Asia/Taipei, Monday-Friday.
-    # Runs after chips, main scan, volume, US market, and contrarian scan.
-    - cron: "40 10 * * 1-5"
+    # 11:00 UTC = 19:00 Asia/Taipei safety net, Monday-Friday.
+    # Only matters if the workflow_run chain breaks; commits nothing if data unchanged.
+    - cron: "0 11 * * 1-5"
 
 permissions:
   contents: write
@@ -25,6 +28,7 @@ permissions:
 jobs:
   update-data-json:
     runs-on: ubuntu-latest
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     env:
       GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
       GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
