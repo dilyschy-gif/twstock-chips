@@ -36,11 +36,67 @@ def get_last_trading_date():
         d -= timedelta(days=1)
     return d.strftime("%Y%m%d"), d.strftime("%Y-%m-%d")
 
+# ══════════ 共用工具 ══════════
+def parse_num(v):
+    """把 '1,234' 這類字串轉成整數，失敗回傳 0。"""
+    try:
+        return int(str(v).replace(",", "").strip())
+    except Exception:
+        return 0
+
+
+def to_lots(shares):
+    """股 → 張（1 張 = 1000 股），四捨五入並保留正負號。
+
+    2026-07 修正：TWSE/TPEX API 回傳單位是「股」，
+    但下游備註與顯示都寫「張」，統一在源頭轉換。
+    """
+    return int(round(shares / 1000))
+
+
+def sanity_check(results, market_label):
+    """自我驗算：外資+投信+自營商 應約等於 三大法人合計。
+
+    容差 3 張（涵蓋零股進位誤差）。若大量不合，代表 API 欄位順序改了，
+    立刻在 log 大聲警告，避免再發生「合計欄抓錯位置」而無人發現的狀況。
+    """
+    mismatch = 0
+    sample = None
+    for r in results:
+        diff = abs((r["foreign"] + r["sitc"] + r["dealer"]) - r["total"])
+        if diff > 3:
+            mismatch += 1
+            if sample is None:
+                sample = r
+    if mismatch:
+        pct = mismatch * 100 // max(len(results), 1)
+        print(f"⚠️⚠️ [{market_label}] 驗算不合 {mismatch} 檔（{pct}%）！"
+              f"API 欄位順序可能已變動，請立即檢查。"
+              f"樣本：{sample['code']} 外資{sample['foreign']}+投信{sample['sitc']}"
+              f"+自營{sample['dealer']} ≠ 合計{sample['total']}")
+    else:
+        print(f"[{market_label}] 驗算通過：外資+投信+自營商 ≈ 合計（{len(results)} 檔）")
+
+
 # ══════════ 抓 TWSE 三大法人（上市）══════════
 def fetch_twse_chips(date_str):
     """
     date_str: "20260615" 格式
-    回傳 list of dict
+    回傳 list of dict（單位：張）
+
+    T86 欄位對照（selectType=ALLBUT0999，共 19 欄）：
+      [0]證券代號 [1]證券名稱
+      [2-4]  外陸資 買進/賣出/買賣超（不含外資自營商）
+      [5-7]  外資自營商 買進/賣出/買賣超
+      [8-10] 投信 買進/賣出/買賣超
+      [11]   自營商買賣超（合計）
+      [12-14]自營商(自行買賣) 買進/賣出/買賣超
+      [15-17]自營商(避險) 買進/賣出/買賣超
+      [18]   三大法人買賣超股數 ← 真正的合計
+
+    2026-07 修正：原版把 [12]（自營商「買進」自行買賣）誤當成三法人合計，
+    導致合計恆為非負數、「法人買超」加分形同虛設。現改抓 [18]，
+    外資改為 [4]+[7]（含外資自營商），使 外資+投信+自營商 = 合計 可驗算。
     """
     url = f"https://www.twse.com.tw/rwd/zh/fund/T86?date={date_str}&selectType=ALLBUT0999&response=json"
     headers = {
@@ -69,22 +125,20 @@ def fetch_twse_chips(date_str):
             code = str(row[0]).strip()
             if not code.isdigit() or len(code) != 4:
                 continue
-            def parse_num(v):
-                try:
-                    return int(str(v).replace(",", "").strip())
-                except:
-                    return 0
+            if len(row) < 19:
+                continue  # 欄位數不足，跳過並依靠 sanity_check 察覺異常
             results.append({
                 "date":    date_label,
                 "code":    code,
                 "name":    str(row[1]).strip(),
                 "market":  "上市",
-                "foreign": parse_num(row[4]),   # 外資買賣超（股）
-                "sitc":    parse_num(row[10]),   # 投信買賣超（股）
-                "dealer":  parse_num(row[11]),   # 自營商買賣超（股）
-                "total":   parse_num(row[12])    # 三法人合計
+                "foreign": to_lots(parse_num(row[4]) + parse_num(row[7])),  # 外陸資+外資自營商（張）
+                "sitc":    to_lots(parse_num(row[10])),                      # 投信買賣超（張）
+                "dealer":  to_lots(parse_num(row[11])),                      # 自營商買賣超合計（張）
+                "total":   to_lots(parse_num(row[18]))                       # 三大法人買賣超（張）
             })
         print(f"TWSE：取得 {len(results)} 檔")
+        sanity_check(results, "TWSE")
         return results
     except Exception as e:
         print(f"TWSE 抓取失敗: {e}")
@@ -136,22 +190,33 @@ def fetch_tpex_chips(date_str):
             code = str(row[0]).strip()
             if not code.isdigit() or len(code) != 4:
                 continue
-            def parse_num(v):
-                try:
-                    return int(str(v).replace(",", "").strip())
-                except:
-                    return 0
+            if len(row) < 24:
+                continue  # 欄位數不足，跳過並依靠 sanity_check 察覺異常
+            # TPEX 3itrade_hedge 欄位對照（買/賣/淨 三欄一組，共 24 欄）：
+            #   [0]代號 [1]名稱
+            #   [2-4]  外資及陸資(不含外資自營商) 買/賣/淨
+            #   [5-7]  外資自營商 買/賣/淨
+            #   [8-10] 外資及陸資合計 買/賣/淨
+            #   [11-13]投信 買/賣/淨
+            #   [14-16]自營商(自行買賣) 買/賣/淨
+            #   [17-19]自營商(避險) 買/賣/淨
+            #   [20-22]自營商合計 買/賣/淨
+            #   [23]   三大法人買賣超合計
+            # 2026-07 修正：原版沿用 TWSE 的 index（4/10/11/12），
+            # 在 TPEX 上等於把「外資合計淨額」當投信、「投信買進」當自營商、
+            # 「投信賣出」當三法人合計——上櫃股的投信連買紀錄因此全是錯的。
             results.append({
                 "date":    date_label,
                 "code":    code,
                 "name":    str(row[1]).strip(),
                 "market":  "上櫃",
-                "foreign": parse_num(row[4]),
-                "sitc":    parse_num(row[10]),
-                "dealer":  parse_num(row[11]),
-                "total":   parse_num(row[12])
+                "foreign": to_lots(parse_num(row[10])),   # 外資及陸資合計買賣超（張）
+                "sitc":    to_lots(parse_num(row[13])),   # 投信買賣超（張）
+                "dealer":  to_lots(parse_num(row[22])),   # 自營商合計買賣超（張）
+                "total":   to_lots(parse_num(row[23]))    # 三大法人合計（張）
             })
         print(f"TPEX：取得 {len(results)} 檔")
+        sanity_check(results, "TPEX")
         return results
     except Exception as e:
         print(f"TPEX 抓取失敗: {e}")
