@@ -23,7 +23,9 @@ from google.oauth2.service_account import Credentials
 
 # ══════════ 設定區 ══════════
 SHEET_NAME      = "籌碼面資料"   # Google Sheets 分頁名稱
-HISTORY_DAYS    = 10             # 保留幾個交易日的歷史
+HISTORY_DAYS    = 20             # 保留幾個交易日的歷史
+# 2026-07 修正：原本 10 天會讓「投信連買 15 日」的評分階永遠達不到（死程式碼），
+# 改為 20 天，連買天數計算上限與評分表對齊。
 
 # ══════════ 取得最近交易日 ══════════
 def get_last_trading_date():
