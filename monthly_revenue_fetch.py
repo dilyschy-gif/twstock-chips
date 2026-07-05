@@ -22,7 +22,7 @@ monthly_revenue_fetch.py
 import io
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
 import gspread
 import pandas as pd
@@ -31,13 +31,19 @@ from google.oauth2.service_account import Credentials
 
 # ══════════ 設定區 ══════════
 SHEET_NAME = "月營收"
+DATABASE_SHEET = "股票資料庫"   # 觀察名單來源：與主掃描共用同一份股票清單
 
-WATCHLIST = {
-    "8081": {"name": "致新", "market": "TWSE"},
-    "6719": {"name": "力智", "market": "TWSE"},
-    "6415": {"name": "矽力*-KY", "market": "TWSE"},
-    "6138": {"name": "茂達", "market": "TPEx"},
+# 2026-07 修正：原本 WATCHLIST 寫死 4 檔，導致「月營收」分頁只有零星資料、
+# 無法支撐條件②（營收成長動能）篩選。改為執行時從「股票資料庫」分頁動態
+# 載入全部代號；讀取失敗時退回以下 4 檔，確保程式不會空轉。
+FALLBACK_WATCHLIST = {
+    "8081": "致新",
+    "6719": "力智",
+    "6415": "矽力*-KY",
+    "6138": "茂達",
 }
+
+TAIPEI_TZ = timezone(timedelta(hours=8))
 
 URLS = {
     "TWSE": "https://mopsfin.twse.com.tw/opendata/t187ap05_L.csv",
@@ -95,6 +101,50 @@ def connect_sheets():
     return gc.open_by_key(sheet_id)
 
 
+# ══════════ 載入觀察名單（股票資料庫分頁）══════════
+def load_watchlist(wb) -> dict:
+    """從「股票資料庫」分頁讀取代號→名稱對照。失敗時退回 FALLBACK_WATCHLIST。"""
+    try:
+        sheet = wb.worksheet(DATABASE_SHEET)
+        records = sheet.get_all_values()
+    except Exception as e:
+        print(f"  ⚠️ 讀取「{DATABASE_SHEET}」失敗（{e}），退回內建 {len(FALLBACK_WATCHLIST)} 檔名單")
+        return dict(FALLBACK_WATCHLIST)
+
+    if len(records) < 2:
+        print(f"  ⚠️ 「{DATABASE_SHEET}」沒有資料，退回內建名單")
+        return dict(FALLBACK_WATCHLIST)
+
+    header = [h.strip() for h in records[0]]
+    code_idx = name_idx = None
+    for i, h in enumerate(header):
+        if code_idx is None and ("代號" in h or "代碼" in h):
+            code_idx = i
+        if name_idx is None and "名稱" in h:
+            name_idx = i
+
+    if code_idx is None:
+        print(f"  ⚠️ 「{DATABASE_SHEET}」表頭找不到代號欄位，退回內建名單")
+        return dict(FALLBACK_WATCHLIST)
+
+    watchlist = {}
+    for row in records[1:]:
+        if code_idx >= len(row):
+            continue
+        code = str(row[code_idx]).strip()
+        if not code or not code[:1].isdigit():
+            continue
+        name = str(row[name_idx]).strip() if (name_idx is not None and name_idx < len(row)) else ""
+        watchlist[code] = name
+
+    if not watchlist:
+        print(f"  ⚠️ 「{DATABASE_SHEET}」解析後沒有有效代號，退回內建名單")
+        return dict(FALLBACK_WATCHLIST)
+
+    print(f"  已從「{DATABASE_SHEET}」載入 {len(watchlist)} 檔觀察名單")
+    return watchlist
+
+
 # ══════════ 抓取月營收 CSV ══════════
 def fetch_revenue_csv(market: str) -> pd.DataFrame:
     """抓取指定市場(TWSE/TPEx)的月營收彙總CSV，回傳DataFrame。失敗時回傳空表。"""
@@ -123,28 +173,31 @@ def fetch_revenue_csv(market: str) -> pd.DataFrame:
     return df
 
 
-def get_watchlist_revenue() -> pd.DataFrame:
-    """合併上市+上櫃資料，過濾出觀察名單，回傳整理後的DataFrame。"""
+def get_watchlist_revenue(watchlist: dict) -> pd.DataFrame:
+    """合併上市+上櫃資料，過濾出觀察名單，回傳整理後的DataFrame。
+
+    以代號直接對兩個市場的 CSV 過濾（同一代號只會出現在其中一邊），
+    不再依賴人工維護的市場別欄位，避免上市/上櫃設定錯誤漏抓。
+    """
+    target_ids = set(watchlist.keys())
     all_rows = []
+    found_ids = set()
 
     for market in ("TWSE", "TPEx"):
         df = fetch_revenue_csv(market)
         if df.empty:
             continue
 
-        target_ids = [sid for sid, info in WATCHLIST.items() if info["market"] == market]
         matched = df[df["stock_id"].isin(target_ids)].copy()
-
-        found_ids = set(matched["stock_id"].tolist())
-        missing_ids = set(target_ids) - found_ids
-        if missing_ids:
-            missing_names = [WATCHLIST[i]["name"] for i in missing_ids]
-            print(f"  ⚠️ [{market}] 找不到以下股票的資料: {missing_names} "
-                  f"({sorted(missing_ids)})，可能是當月資料尚未公告，"
-                  f"或股票實際所屬市場(上市/上櫃)設定有誤，請手動核對")
-
         if not matched.empty:
+            found_ids |= set(matched["stock_id"].tolist())
             all_rows.append(matched)
+
+    missing_ids = target_ids - found_ids
+    if missing_ids:
+        preview = sorted(missing_ids)[:10]
+        print(f"  ⚠️ 有 {len(missing_ids)} 檔在兩個市場的月營收CSV都找不到"
+              f"（例如 {preview}），可能是當月資料尚未公告、興櫃/ETF、或代號有誤")
 
     if not all_rows:
         return pd.DataFrame()
@@ -190,7 +243,7 @@ def get_existing_keys(sheet) -> set:
 
 
 # ══════════ 寫入試算表 ══════════
-def write_to_sheets(wb, df: pd.DataFrame):
+def write_to_sheets(wb, df: pd.DataFrame, watchlist: dict):
     try:
         sheet = wb.worksheet(SHEET_NAME)
     except gspread.WorksheetNotFound:
@@ -200,7 +253,7 @@ def write_to_sheets(wb, df: pd.DataFrame):
 
     existing_keys = get_existing_keys(sheet)
 
-    now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+    now_str = datetime.now(TAIPEI_TZ).strftime("%Y-%m-%d %H:%M")
     new_rows = []
     skipped = 0
 
@@ -209,8 +262,10 @@ def write_to_sheets(wb, df: pd.DataFrame):
         if key in existing_keys:
             skipped += 1
             continue
+        code = str(r["stock_id"]).strip()
+        name = watchlist.get(code) or r.get("company_name", "")
         new_rows.append([
-            now_str, r["data_ym"], r["stock_id"], WATCHLIST.get(r["stock_id"], {}).get("name", r.get("company_name", "")),
+            now_str, r["data_ym"], code, name,
             r["revenue_this_month"], r["mom_pct"], r["yoy_pct"],
             r["cumulative_revenue"], r["cumulative_yoy_pct"],
         ])
@@ -232,7 +287,10 @@ def main():
     print("觀察名單月營收抓取開始")
     print("=" * 50)
 
-    df = get_watchlist_revenue()
+    wb = connect_sheets()
+    watchlist = load_watchlist(wb)
+
+    df = get_watchlist_revenue(watchlist)
 
     if df.empty:
         print("❌ 沒有抓到任何資料，結束（可能是當月資料尚未公告）")
@@ -240,10 +298,11 @@ def main():
 
     data_periods = df["data_ym"].unique().tolist()
     print(f"成功抓到 {len(df)} 檔股票資料，資料年月：{data_periods}")
-    print(df[["data_ym", "stock_id", "revenue_this_month", "yoy_pct"]].to_string(index=False))
+    print(df[["data_ym", "stock_id", "revenue_this_month", "yoy_pct"]].head(20).to_string(index=False))
+    if len(df) > 20:
+        print(f"  ...（其餘 {len(df) - 20} 檔省略顯示）")
 
-    wb = connect_sheets()
-    write_to_sheets(wb, df)
+    write_to_sheets(wb, df, watchlist)
 
     print("\n" + "=" * 50)
     print("完成")
