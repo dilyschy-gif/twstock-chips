@@ -6,7 +6,7 @@ const demoStocks = [
   { code: "2881", name: "富邦金", signal: "watch", score: 68, note: "金融股穩定，等待量能放大", market: "上市" }
 ];
 
-let datasets = { main: [...demoStocks], contrarian: [] };
+let datasets = { main: [...demoStocks], contrarian: [], brewing: [] };
 let currentMode = "main";
 let dataSource = "Demo";
 let datasetMeta = {};
@@ -37,6 +37,17 @@ const modeCopy = {
     eyebrow: "Contrarian Scan",
     sideTitle: "逆勢抗跌邏輯",
     notes: ["依大盤燈號調整門檻。", "市場弱勢時提高個股篩選標準。", "優先找相對強、籌碼穩、止跌轉強標的。"]
+  },
+  brewing: {
+    title: "右腳醞釀精選",
+    eyebrow: "Right-Foot Brewing",
+    sideTitle: "右腳醞釀邏輯",
+    notes: [
+      "N字突破：剛越過局部頸線，右腳啟動。",
+      "未創波段新高：還沒噴出，避免追高。",
+      "投信連買 ≥ 5 日：法人已先進駐。",
+      "★帶寬收斂為加分項：能量壓縮，優先關注。"
+    ]
   }
 };
 
@@ -55,6 +66,7 @@ const elements = {
   stockRows: document.getElementById("stockRows"),
   mainModeBtn: document.getElementById("mainModeBtn"),
   contrarianModeBtn: document.getElementById("contrarianModeBtn"),
+  brewingModeBtn: document.getElementById("brewingModeBtn"),
   resultEyebrow: document.getElementById("resultEyebrow"),
   resultTitle: document.getElementById("resultTitle"),
   sideTitle: document.getElementById("sideTitle"),
@@ -71,15 +83,54 @@ const elements = {
 };
 
 function normalizeStock(item) {
+  const note = String(item.note ?? item.reason ?? item.badges ?? "").trim();
+  const badges = String(item.badges ?? "").trim();
+  const combined = note + "；" + badges;
+  const trustMatch = combined.match(/投信連買(\d+)日/);
   return {
     code: String(item.code ?? item.stock_id ?? "").trim(),
     name: String(item.name ?? item.stock_name ?? "未命名").trim(),
     signal: ["strong", "watch", "risk"].includes(item.signal) ? item.signal : "watch",
     score: Number(item.score ?? item.chip_score ?? item.totalScore ?? 0),
-    note: String(item.note ?? item.reason ?? item.badges ?? "").trim(),
+    note: note,
+    badges: badges,
+    bbSignal: note.split("；")[0].trim(),
+    trustStreak: trustMatch ? Number(trustMatch[1]) : 0,
     market: String(item.market ?? item.market_type ?? "").trim(),
     marketLight: String(item.market_light ?? item.marketLight ?? "").trim()
   };
+}
+
+// ══════════ 右腳醞釀精選 ══════════
+// 必要條件：N字突破（剛越過局部頸線，右腳啟動）
+//        ＋ 未創波段新高（還沒噴出，避免追高）
+//        ＋ 投信連買 >= 5 日（法人已進駐）
+// 加分項：帶寬收斂（能量壓縮，蓄勢待發）→ 名單中以 ★ 標記並排在最前
+// 注意：「未創波段新高」包含「波段新高」子字串，判斷前必須先移除，
+//       否則所有醞釀股都會被誤判為已創新高而漏掉。
+const BREWING_MIN_TRUST_STREAK = 5;
+
+function isBrewingCandidate(stock) {
+  const text = stock.note + "；" + stock.badges;
+  const textClean = text.replaceAll("未創波段新高", "");
+  const hasBreakout = text.includes("N字突破");
+  const notNewHigh = !textClean.includes("波段新高");
+  const trustBacked = stock.trustStreak >= BREWING_MIN_TRUST_STREAK;
+  return hasBreakout && notNewHigh && trustBacked;
+}
+
+function hasSqueeze(stock) {
+  return stock.bbSignal.includes("收斂") || (stock.note + stock.badges).includes("帶寬收斂");
+}
+
+function buildBrewingList(mainStocks) {
+  return mainStocks
+    .filter(isBrewingCandidate)
+    .map((stock) => Object.assign({}, stock, {
+      squeeze: hasSqueeze(stock),
+      note: (hasSqueeze(stock) ? "★帶寬收斂｜" : "") + "投信連買" + stock.trustStreak + "日｜" + stock.note
+    }))
+    .sort((a, b) => (Number(b.squeeze) - Number(a.squeeze)) || (b.score - a.score) || (b.trustStreak - a.trustStreak));
 }
 
 function activeStocks() {
@@ -95,6 +146,9 @@ function setMode(mode) {
   currentMode = mode;
   elements.mainModeBtn.classList.toggle("active", mode === "main");
   elements.contrarianModeBtn.classList.toggle("active", mode === "contrarian");
+  if (elements.brewingModeBtn) {
+    elements.brewingModeBtn.classList.toggle("active", mode === "brewing");
+  }
   render();
 }
 
@@ -166,20 +220,25 @@ async function loadJsonData() {
     const contrarianRows = Array.isArray(payload.contrarian_stocks) ? payload.contrarian_stocks : [];
     if (!Array.isArray(mainRows)) throw new Error("data.json 格式需要包含 stocks 陣列");
 
+    const mainList = mainRows.map(normalizeStock).filter((stock) => stock.code);
     datasets = {
-      main: mainRows.map(normalizeStock).filter((stock) => stock.code),
-      contrarian: contrarianRows.map(normalizeStock).filter((stock) => stock.code)
+      main: mainList,
+      contrarian: contrarianRows.map(normalizeStock).filter((stock) => stock.code),
+      brewing: buildBrewingList(mainList)
     };
     datasetMeta = payload.datasets || {
       main: { sheet_tab: payload.sheet_tab || "選股結果" },
       contrarian: { sheet_tab: payload.contrarian_sheet_tab || "逆勢抗跌" }
     };
+    if (!datasetMeta.brewing) {
+      datasetMeta.brewing = { sheet_tab: "選股結果（前端精選）" };
+    }
     dataSource = payload.source || "data.json";
     render();
-    setStatus("資料已更新", "主升段 " + datasets.main.length + " 筆；逆勢抗跌 " + datasets.contrarian.length + " 筆");
+    setStatus("資料已更新", "主升段 " + datasets.main.length + " 筆；逆勢抗跌 " + datasets.contrarian.length + " 筆；右腳醞釀 " + datasets.brewing.length + " 筆");
   } catch (error) {
     dataSource = "Demo";
-    datasets = { main: [...demoStocks], contrarian: [] };
+    datasets = { main: [...demoStocks], contrarian: [], brewing: [] };
     render();
     setStatus("使用示範資料", error.message);
   }
@@ -533,6 +592,9 @@ function formatDate(value) {
 
 elements.mainModeBtn.addEventListener("click", () => setMode("main"));
 elements.contrarianModeBtn.addEventListener("click", () => setMode("contrarian"));
+if (elements.brewingModeBtn) {
+  elements.brewingModeBtn.addEventListener("click", () => setMode("brewing"));
+}
 elements.runBtn.addEventListener("click", runFrontendProgram);
 elements.loadBtn.addEventListener("click", loadJsonData);
 elements.stockSearch.addEventListener("input", render);
