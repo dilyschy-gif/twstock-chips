@@ -13,7 +13,7 @@ SCOPES = [
 ]
 
 SHEET_ID = os.environ.get("GOOGLE_SHEET_ID", "")
-SHEET_SCAN_SOURCES = ["掃描結果", "選股結果"]
+SHEET_SCAN_SOURCES = ["選股結果"]
 SHEET_CHIPS = "籌碼面資料"
 SHEET_OUTPUT = "逆勢抗跌掃描"
 
@@ -57,6 +57,23 @@ def safe_text(v):
 
 def taipei_now():
     return datetime.datetime.now(TAIPEI_TZ)
+
+
+def parse_date_key(text):
+    """把 2026-07-02 / 2026/7/2 / 2026.07.02 等格式統一成 20260702 供排序。
+
+    修正前直接用原始字串排序，日期格式混用時連買天數會算錯。
+    """
+    text = safe_text(text)
+    if not text:
+        return ""
+    for fmt in ("%Y-%m-%d", "%Y/%m/%d", "%Y.%m.%d"):
+        try:
+            return datetime.datetime.strptime(text[:10], fmt).strftime("%Y%m%d")
+        except ValueError:
+            pass
+    digits = "".join(ch for ch in text if ch.isdigit())
+    return digits[:8]
 
 
 def fetch_market_index_change():
@@ -181,7 +198,7 @@ def calc_institutional_streaks(gc):
 
     streaks = {}
     for code, entries in stock_data.items():
-        entries.sort(key=lambda x: x["date"], reverse=True)
+        entries.sort(key=lambda x: parse_date_key(x["date"]), reverse=True)
 
         trust_streak = 0
         foreign_streak = 0
@@ -320,7 +337,8 @@ def fetch_stock_daily_change(code, market="上市"):
     suffix = ".TW" if market == "上市" else ".TWO"
     symbol = f"{code}{suffix}"
     url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
-    params = {"range": "2d", "interval": "1d"}
+    # 5d 而非 2d：連假後 2d 可能只回 1 筆有效收盤，導致整檔被誤判為無資料
+    params = {"range": "5d", "interval": "1d"}
     headers = {"User-Agent": "Mozilla/5.0"}
 
     try:
@@ -352,13 +370,19 @@ def fetch_stock_daily_change(code, market="上市"):
 
 
 def calc_contrarian_score(stock_change_pct, market_change_pct):
+    """抗跌/相對強度評分（2026-07 修正版）。
+
+    修正前：大盤上漲日用 abs(大盤)+個股漲幅 當相對強度，
+    會讓「漲得比大盤少的弱勢股」也拿到高分。
+    修正後：rel_strength = 個股漲跌% − 大盤漲跌%（標準相對報酬），
+    大盤跌 2% 而個股平盤 → +2；大盤漲 2% 而個股只漲 0.5% → -1.5（不給分）。
+    """
+    rel_strength = stock_change_pct - market_change_pct
+
+    # 絕對上漲分：逆勢收紅本身就有意義
     score_a = 20 if stock_change_pct > 2 else 15 if stock_change_pct > 0 else 0
 
-    if stock_change_pct > 0:
-        rel_strength = abs(market_change_pct) + stock_change_pct
-    else:
-        rel_strength = abs(market_change_pct) - abs(stock_change_pct)
-
+    # 相對強度分
     if rel_strength >= 3:
         score_b = 20
     elif rel_strength >= 2:
@@ -369,6 +393,10 @@ def calc_contrarian_score(stock_change_pct, market_change_pct):
         score_b = 5
     else:
         score_b = 0
+
+    # 大盤上漲日，個股必須「漲贏大盤」才算強勢；只看絕對漲幅會誤判
+    if market_change_pct > 0 and rel_strength < 0:
+        score_a = 0
 
     return max(score_a, score_b), round(rel_strength, 2)
 
