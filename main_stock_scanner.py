@@ -52,6 +52,7 @@ MIN_VOLUME_LOTS = 300
 FORMAL_THRESHOLD = 60
 OBSERVE_THRESHOLD = 30
 REQUEST_SLEEP_SECONDS = 0.12
+TAIPEI_TZ = datetime.timezone(datetime.timedelta(hours=8))
 
 OUTPUT_HEADERS = [
     "代號", "名稱", "市場", "產業", "現價", "BB訊號", "N字目標", "起漲點", "帶寬",
@@ -78,6 +79,16 @@ def get_sheet(gc):
 
 def safe_text(value) -> str:
     return str(value).strip() if value is not None else ""
+
+
+def cell(row: List, idx: Optional[int], default: str = "") -> str:
+    """安全讀取欄位：idx 為 None、負數或超界時回傳 default。
+
+    修正前用 row[col.get(key, -1)]，欄位不存在時 -1 會默默讀到該列最後一欄。
+    """
+    if idx is None or idx < 0 or idx >= len(row):
+        return default
+    return safe_text(row[idx])
 
 
 def parse_num(value) -> float:
@@ -156,10 +167,10 @@ def read_stock_database(gc) -> List[Dict]:
         if not code:
             continue
         stocks.append({
-            "market": safe_text(row[col.get("market", -1)]) if col.get("market", -1) < len(row) else "上市",
+            "market": cell(row, col.get("market"), "上市") or "上市",
             "code": code,
-            "name": safe_text(row[col.get("name", -1)]) if col.get("name", -1) < len(row) else "",
-            "industry": safe_text(row[col.get("industry", -1)]) if col.get("industry", -1) < len(row) else "",
+            "name": cell(row, col.get("name")),
+            "industry": cell(row, col.get("industry")),
         })
     return stocks
 
@@ -240,20 +251,24 @@ def read_chip_streaks(gc) -> Dict[str, Dict]:
         chips_score = 0
         if latest_total > 0:
             chips_score += 10
+        # 投信連買（主要權重）
         if trust_streak >= 15:
-            chips_score += 35
+            chips_score += 30
         elif trust_streak >= 10:
-            chips_score += 28
+            chips_score += 24
         elif trust_streak >= 5:
-            chips_score += 20
+            chips_score += 18
         elif trust_streak >= 3:
-            chips_score += 12
-        elif trust_streak >= 1:
-            chips_score += 5
-        elif foreign_streak >= 5:
             chips_score += 10
+        elif trust_streak >= 1:
+            chips_score += 4
+        # 外資連買（獨立加分，不再被投信連買 1 日就整個蓋掉）
+        if foreign_streak >= 10:
+            chips_score += 8
+        elif foreign_streak >= 5:
+            chips_score += 5
         elif foreign_streak >= 3:
-            chips_score += 6
+            chips_score += 3
 
         result[code] = {
             "latest_total": latest_total,
@@ -368,7 +383,7 @@ def fetch_daily_history(code: str, market: str) -> Optional[List[Dict]]:
             if close is None or high is None or low is None:
                 continue
             rows.append({
-                "date": datetime.datetime.fromtimestamp(ts).strftime("%Y-%m-%d"),
+                "date": datetime.datetime.fromtimestamp(ts, tz=TAIPEI_TZ).strftime("%Y-%m-%d"),
                 "open": opens[i] if i < len(opens) and opens[i] is not None else close,
                 "high": high,
                 "low": low,
@@ -421,30 +436,71 @@ def calc_indicators(history: List[Dict]) -> Dict:
     }
 
 
-def calc_kd(highs: List[float], lows: List[float], closes: List[float]) -> Tuple[float, float]:
-    rsv_values = []
-    for end in range(max(9, len(closes) - 5), len(closes) + 1):
-        window_high = max(highs[end - 9:end])
-        window_low = min(lows[end - 9:end])
-        close = closes[end - 1]
-        rsv = 50 if window_high == window_low else (close - window_low) / (window_high - window_low) * 100
-        rsv_values.append(rsv)
+def calc_kd(highs: List[float], lows: List[float], closes: List[float],
+            period: int = 9) -> Tuple[float, float]:
+    """標準 KD(9,3,3)：K = 2/3·前K + 1/3·RSV；D = 2/3·前D + 1/3·K。
 
-    if not rsv_values:
+    修正前用 RSV 簡單平均近似，數值會跟看盤軟體對不上；改為遞迴平滑後一致。
+    """
+    if len(closes) < period:
         return 50.0, 50.0
-    k = sum(rsv_values[-3:]) / min(3, len(rsv_values))
-    d = sum(rsv_values[-5:]) / min(5, len(rsv_values))
+
+    k, d = 50.0, 50.0
+    for end in range(period, len(closes) + 1):
+        window_high = max(highs[end - period:end])
+        window_low = min(lows[end - period:end])
+        close = closes[end - 1]
+        rsv = 50.0 if window_high == window_low else (close - window_low) / (window_high - window_low) * 100
+        k = k * 2 / 3 + rsv / 3
+        d = d * 2 / 3 + k / 3
     return round(k, 2), round(d, 2)
 
 
-def calc_n_structure(highs: List[float], lows: List[float], closes: List[float]) -> Dict:
-    close = closes[-1]
-    prior_20_high = max(highs[-21:-1]) if len(highs) >= 21 else max(highs[:-1])
-    prior_60_high = max(highs[-61:-1]) if len(highs) >= 61 else max(highs[:-1])
-    recent_low_window = lows[-45:-5] if len(lows) >= 45 else lows[:-5] or lows[:-1]
-    start_price = min(recent_low_window) if recent_low_window else min(lows)
+def find_recent_pivot_high(highs: List[float], left: int = 3, right: int = 3,
+                           skip_recent: int = 1) -> Optional[int]:
+    """找最近一個波段轉折高點（pivot high）的索引。
 
-    neckline = max(prior_20_high, prior_60_high)
+    pivot high 定義：該日高點 >= 左右各 left/right 天窗口內的最高價。
+    skip_recent 避免把最近一兩天（可能就是突破當天）誤當成頸線。
+    找不到時回傳 None。
+    """
+    n = len(highs)
+    for i in range(n - right - skip_recent - 1, left - 1, -1):
+        window = highs[i - left:i + right + 1]
+        if highs[i] >= max(window):
+            return i
+    return None
+
+
+def calc_n_structure(highs: List[float], lows: List[float], closes: List[float]) -> Dict:
+    """N 字結構（2026-07 修正版）。
+
+    修正前：neckline = max(20日前高, 60日前高)，數學上恆等於 60 日前高，
+    導致「N字頸線突破」與「創波段新高」是同一個條件——只會抓到已經噴出的股票。
+
+    修正後：
+      - neckline    = 最近一個波段轉折高點（左腳的頂，pivot high）
+      - start_price = 該轉折高點之後的回檔低點（右腳起漲點）
+      - n_target    = 頸線 + (頸線 - 右腳低點)
+      - swing_new_high 維持「收盤 > 60 日前高」，與頸線突破為兩個獨立條件。
+        右腳醞釀股會呈現「接近/剛突破頸線、但尚未創 60 日新高」的組合。
+    """
+    close = closes[-1]
+    prior_60_high = max(highs[-61:-1]) if len(highs) >= 61 else max(highs[:-1])
+
+    pivot_idx = find_recent_pivot_high(highs)
+    if pivot_idx is not None:
+        neckline = highs[pivot_idx]
+        pullback_lows = lows[pivot_idx + 1:-1]
+        if not pullback_lows:
+            pullback_lows = lows[pivot_idx:]
+        start_price = min(pullback_lows)
+    else:
+        # 資料太短、找不到轉折點時的退回邏輯
+        neckline = max(highs[-21:-1]) if len(highs) >= 21 else max(highs[:-1])
+        recent_low_window = lows[-45:-5] if len(lows) >= 45 else lows[:-5] or lows[:-1]
+        start_price = min(recent_low_window) if recent_low_window else min(lows)
+
     neckline_breakout = close > neckline
     swing_new_high = close > prior_60_high
     n_target = neckline + max(neckline - start_price, 0)
@@ -614,7 +670,7 @@ def write_table(sh, title: str, rows: List[List]):
 
 def write_progress(sh, status: str, start_index: int, passed_count: int):
     ws = worksheet_or_create(sh, SHEET_PROGRESS, rows=20, cols=5)
-    now = datetime.datetime.now().strftime("%Y/%m/%d %H:%M:%S")
+    now = datetime.datetime.now(TAIPEI_TZ).strftime("%Y/%m/%d %H:%M:%S")
     ws.clear()
     ws.update(range_name="A1", values=[
         ["狀態", "起始索引", "已通過數", "最後更新"],
@@ -706,7 +762,7 @@ def run_main_scan():
     all_rows = formal_rows + observe_rows
     all_rows.sort(key=lambda row: parse_num(row[14]), reverse=True)
 
-    write_table(sh, SHEET_SCAN_RESULT, all_rows)
+    # 只寫「選股結果」一個分頁：逆勢抗跌掃描與 data.json 匯出都改讀這一頁
     write_table(sh, SHEET_SELECTION, all_rows)
     write_progress(sh, "完成", start_index, len(all_rows))
 
@@ -719,7 +775,7 @@ def run_main_scan():
     print(f"分數低於觀察門檻{OBSERVE_THRESHOLD}：{stats['below_observe']}")
     print(f"正式名單：{len(formal_rows)}")
     print(f"觀察名單：{len(observe_rows)}")
-    print(f"已寫入「{SHEET_SCAN_RESULT}」與「{SHEET_SELECTION}」")
+    print(f"已寫入「{SHEET_SELECTION}」")
 
     return formal_rows, observe_rows
 
