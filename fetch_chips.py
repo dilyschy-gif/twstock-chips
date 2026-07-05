@@ -1,314 +1,313 @@
-# -*- coding: utf-8 -*-
 """
-fetch_chips.py — v2（TPEX 補上 Referer 標頭）
-每日自動抓取 TWSE + TPEX 三大法人買賣超資料
-並寫入 Google Sheets「籌碼面資料」分頁
+monthly_revenue_fetch.py
+抓取台灣證交所(TWSE)與證券櫃檯買賣中心(TPEx)官方月營收公開資料，
+過濾出觀察名單股票，並寫入 Google Sheets「月營收」分頁。
 
-執行環境：GitHub Actions（每天台灣時間 14:35 自動執行）
-資料來源：TWSE T86 + TPEX（官方免費，不需要帳號）
+寫入規格比照 fetch_us_market.py：
+同一份 Service Account 認證、同一支試算表，
+新增一個獨立分頁，不影響「美股連動」「籌碼面資料」等既有分頁。
 
-v2 改動：
-  fetch_tpex_chips() 補上 Referer、Accept、X-Requested-With 標頭。
-  TPEX 的這個 AJAX 端點原本只帶 User-Agent 時會被判定為非瀏覽器請求，
-  回應「無資料」（aaData 為空），實際上是被擋而非真的沒資料。
+執行環境：GitHub Actions（每月1-20日，台灣時間早上9點）
+資料來源（官方OpenAPI，免費、無流量限制，不依賴Finmind）：
+- 上市公司每月營業收入彙總表: https://mopsfin.twse.com.tw/opendata/t187ap05_L.csv
+- 上櫃公司每月營業收入彙總表: https://mopsfin.twse.com.tw/opendata/t187ap05_O.csv
+
+更新規則：
+公司須於每月10日前申報上月營收，證交所/櫃買中心通常在每月10-17日左右
+更新此彙總表。這份CSV每次都是「整個市場最新一期」的快照，不是歷史序列，
+所以寫入時會比對Sheet既有的(代號, 資料年月)組合，只附加真正新的月份資料，
+避免每天重複跑同一個月的舊資料造成洗版。
 """
 
-import requests
+import io
 import json
-import time
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
+
 import gspread
+import pandas as pd
+import requests
 from google.oauth2.service_account import Credentials
 
 # ══════════ 設定區 ══════════
-SHEET_NAME      = "籌碼面資料"   # Google Sheets 分頁名稱
-HISTORY_DAYS    = 20             # 保留幾個交易日的歷史
-# 2026-07 修正：原本 10 天會讓「投信連買 15 日」的評分階永遠達不到（死程式碼），
-# 改為 20 天，連買天數計算上限與評分表對齊。
+SHEET_NAME = "月營收"
+DATABASE_SHEET = "股票資料庫"   # 觀察名單來源：與主掃描共用同一份股票清單
 
-# ══════════ 取得最近交易日 ══════════
-def get_last_trading_date():
-    """取得最近一個交易日（排除週六、週日）"""
-    d = datetime.now()
-    # 若現在是週六(5)往回1天，週日(6)往回2天
-    while d.weekday() >= 5:
-        d -= timedelta(days=1)
-    return d.strftime("%Y%m%d"), d.strftime("%Y-%m-%d")
+# 2026-07 修正：原本 WATCHLIST 寫死 4 檔，導致「月營收」分頁只有零星資料、
+# 無法支撐條件②（營收成長動能）篩選。改為執行時從「股票資料庫」分頁動態
+# 載入全部代號；讀取失敗時退回以下 4 檔，確保程式不會空轉。
+FALLBACK_WATCHLIST = {
+    "8081": "致新",
+    "6719": "力智",
+    "6415": "矽力*-KY",
+    "6138": "茂達",
+}
 
-# ══════════ 抓 TWSE 三大法人（上市）══════════
-def fetch_twse_chips(date_str):
-    """
-    date_str: "20260615" 格式
-    回傳 list of dict
-    """
-    url = f"https://www.twse.com.tw/rwd/zh/fund/T86?date={date_str}&selectType=ALLBUT0999&response=json"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Referer": "https://www.twse.com.tw/zh/trading/foreign/t86.html"
-    }
-    try:
-        res = requests.get(url, headers=headers, timeout=30, allow_redirects=True)
-        print(f"TWSE T86 回應碼: {res.status_code}")
-        if res.status_code != 200:
-            return []
-        data = res.json()
-        if data.get("stat") != "OK" or not data.get("data"):
-            print(f"TWSE 無資料: {data.get('stat')}")
-            return []
+TAIPEI_TZ = timezone(timedelta(hours=8))
 
-        date_label = data.get("date", date_str)
-        # 轉換民國年到西元年
-        if "/" in str(date_label):
-            parts = str(date_label).split("/")
-            if len(parts) == 3 and int(parts[0]) < 1000:
-                date_label = f"{int(parts[0])+1911}-{parts[1].zfill(2)}-{parts[2].zfill(2)}"
+URLS = {
+    "TWSE": "https://mopsfin.twse.com.tw/opendata/t187ap05_L.csv",
+    "TPEx": "https://mopsfin.twse.com.tw/opendata/t187ap05_O.csv",
+}
 
-        results = []
-        for row in data["data"]:
-            code = str(row[0]).strip()
-            if not code.isdigit() or len(code) != 4:
-                continue
-            def parse_num(v):
-                try:
-                    return int(str(v).replace(",", "").strip())
-                except:
-                    return 0
-            results.append({
-                "date":    date_label,
-                "code":    code,
-                "name":    str(row[1]).strip(),
-                "market":  "上市",
-                "foreign": parse_num(row[4]),   # 外資買賣超（股）
-                "sitc":    parse_num(row[10]),   # 投信買賣超（股）
-                "dealer":  parse_num(row[11]),   # 自營商買賣超（股）
-                "total":   parse_num(row[12])    # 三法人合計
-            })
-        print(f"TWSE：取得 {len(results)} 檔")
-        return results
-    except Exception as e:
-        print(f"TWSE 抓取失敗: {e}")
-        return []
+HTTP_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    )
+}
 
-# ══════════ 抓 TPEX 三大法人（上櫃）══════════
-def fetch_tpex_chips(date_str):
-    """
-    date_str: "20260615" 格式
+# 官方CSV原始欄位 -> 程式內部欄位名稱
+COLUMN_MAP = {
+    "出表日期": "report_date",
+    "資料年月": "data_ym",
+    "公司代號": "stock_id",
+    "公司名稱": "company_name",
+    "產業別": "industry",
+    "營業收入-當月營收": "revenue_this_month",
+    "營業收入-上月營收": "revenue_last_month",
+    "營業收入-去年當月營收": "revenue_same_month_last_year",
+    "營業收入-上月比較增減(%)": "mom_pct",
+    "營業收入-去年同月增減(%)": "yoy_pct",
+    "累計營業收入-當月累計營收": "cumulative_revenue",
+    "累計營業收入-去年累計營收": "cumulative_revenue_last_year",
+    "累計營業收入-前期比較增減(%)": "cumulative_yoy_pct",
+    "備註": "note",
+}
 
-    v2：補上 Referer / Accept / X-Requested-With 標頭。
-    這支是網站內部的 AJAX 端點，原本只帶 User-Agent 時，
-    伺服器會判定請求不是從網頁本身發出的，回應「無資料」
-    （aaData 為空陣列），並非真的當天沒有交易資料。
-    """
-    # 轉換為民國年格式
-    year  = int(date_str[:4]) - 1911
-    mm    = date_str[4:6]
-    dd    = date_str[6:8]
-    tw_date = f"{year}/{mm}/{dd}"
-    year_ad = date_str[:4]
+SHEET_HEADERS = [
+    "更新時間", "資料年月", "代號", "名稱",
+    "當月營收(千元)", "月增率(%)", "年增率(%)",
+    "累計營收(千元)", "累計年增率(%)",
+]
 
-    url = f"https://www.tpex.org.tw/web/stock/3insti/daily_trade/3itrade_hedge_result.php?l=zh-tw&se=EW&t=D&d={tw_date}&_={int(time.time()*1000)}"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
-        "Referer": "https://www.tpex.org.tw/web/stock/3insti/daily_trade/3itrade_hedge.php?l=zh-tw",  # ← v2 新增
-        "Accept": "application/json, text/javascript, */*; q=0.01",                                    # ← v2 新增
-        "X-Requested-With": "XMLHttpRequest",                                                            # ← v2 新增
-    }
-    try:
-        res = requests.get(url, headers=headers, timeout=30)
-        print(f"TPEX 回應碼: {res.status_code}")
-        if res.status_code != 200:
-            return []
 
-        text = res.text
-        if text.strip().startswith("<") or "安全性考量" in text:
-            print(f"TPEX 回應被安全機制擋下: {text[:150]}")
-            return []
-
-        data = res.json()
-        if not data.get("aaData"):
-            print("TPEX 無資料")
-            return []
-
-        date_label = f"{year_ad}-{mm}-{dd}"
-        results = []
-        for row in data["aaData"]:
-            code = str(row[0]).strip()
-            if not code.isdigit() or len(code) != 4:
-                continue
-            def parse_num(v):
-                try:
-                    return int(str(v).replace(",", "").strip())
-                except:
-                    return 0
-            results.append({
-                "date":    date_label,
-                "code":    code,
-                "name":    str(row[1]).strip(),
-                "market":  "上櫃",
-                "foreign": parse_num(row[4]),
-                "sitc":    parse_num(row[10]),
-                "dealer":  parse_num(row[11]),
-                "total":   parse_num(row[12])
-            })
-        print(f"TPEX：取得 {len(results)} 檔")
-        return results
-    except Exception as e:
-        print(f"TPEX 抓取失敗: {e}")
-        return []
-
-# ══════════ 連接 Google Sheets ══════════
+# ══════════ 連接 Google Sheets（與 fetch_us_market.py 同規格）══════════
 def connect_sheets():
-    """
-    從環境變數讀取 Google Service Account 憑證
-    憑證存放在 GitHub Secrets: GOOGLE_CREDENTIALS
-    """
     creds_json = os.environ.get("GOOGLE_CREDENTIALS")
     if not creds_json:
         raise ValueError("找不到 GOOGLE_CREDENTIALS 環境變數")
-
     creds_dict = json.loads(creds_json)
     scopes = [
         "https://spreadsheets.google.com/feeds",
-        "https://www.googleapis.com/auth/drive"
+        "https://www.googleapis.com/auth/drive",
     ]
     creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
-    gc    = gspread.authorize(creds)
+    gc = gspread.authorize(creds)
 
-    # 從環境變數取得試算表 ID
     sheet_id = os.environ.get("GOOGLE_SHEET_ID")
     if not sheet_id:
         raise ValueError("找不到 GOOGLE_SHEET_ID 環境變數")
+    return gc.open_by_key(sheet_id)
 
-    wb = gc.open_by_key(sheet_id)
-    return wb
 
-# ══════════ 寫入 Google Sheets ══════════
-def write_to_sheets(wb, all_data, date_label):
-    """把當日資料寫入試算表"""
+# ══════════ 載入觀察名單（股票資料庫分頁）══════════
+def load_watchlist(wb) -> dict:
+    """從「股票資料庫」分頁讀取代號→名稱對照。失敗時退回 FALLBACK_WATCHLIST。"""
+    try:
+        sheet = wb.worksheet(DATABASE_SHEET)
+        records = sheet.get_all_values()
+    except Exception as e:
+        print(f"  ⚠️ 讀取「{DATABASE_SHEET}」失敗（{e}），退回內建 {len(FALLBACK_WATCHLIST)} 檔名單")
+        return dict(FALLBACK_WATCHLIST)
+
+    if len(records) < 2:
+        print(f"  ⚠️ 「{DATABASE_SHEET}」沒有資料，退回內建名單")
+        return dict(FALLBACK_WATCHLIST)
+
+    header = [h.strip() for h in records[0]]
+    code_idx = name_idx = None
+    for i, h in enumerate(header):
+        if code_idx is None and ("代號" in h or "代碼" in h):
+            code_idx = i
+        if name_idx is None and "名稱" in h:
+            name_idx = i
+
+    if code_idx is None:
+        print(f"  ⚠️ 「{DATABASE_SHEET}」表頭找不到代號欄位，退回內建名單")
+        return dict(FALLBACK_WATCHLIST)
+
+    watchlist = {}
+    for row in records[1:]:
+        if code_idx >= len(row):
+            continue
+        code = str(row[code_idx]).strip()
+        if not code or not code[:1].isdigit():
+            continue
+        name = str(row[name_idx]).strip() if (name_idx is not None and name_idx < len(row)) else ""
+        watchlist[code] = name
+
+    if not watchlist:
+        print(f"  ⚠️ 「{DATABASE_SHEET}」解析後沒有有效代號，退回內建名單")
+        return dict(FALLBACK_WATCHLIST)
+
+    print(f"  已從「{DATABASE_SHEET}」載入 {len(watchlist)} 檔觀察名單")
+    return watchlist
+
+
+# ══════════ 抓取月營收 CSV ══════════
+def fetch_revenue_csv(market: str) -> pd.DataFrame:
+    """抓取指定市場(TWSE/TPEx)的月營收彙總CSV，回傳DataFrame。失敗時回傳空表。"""
+    url = URLS[market]
+    try:
+        resp = requests.get(url, headers=HTTP_HEADERS, timeout=30)
+        resp.raise_for_status()
+    except requests.RequestException as e:
+        print(f"  [{market}] 下載失敗: {e}")
+        return pd.DataFrame()
+
+    resp.encoding = "utf-8-sig"  # 官方CSV為UTF-8 with BOM
+    try:
+        df = pd.read_csv(io.StringIO(resp.text), dtype=str)
+    except Exception as e:
+        print(f"  [{market}] 解析CSV失敗: {e}")
+        return pd.DataFrame()
+
+    df = df.rename(columns=COLUMN_MAP)
+    if "stock_id" not in df.columns:
+        print(f"  [{market}] CSV欄位結構異常，找不到公司代號欄位，"
+              f"目前欄位: {df.columns.tolist()}")
+        return pd.DataFrame()
+
+    df["stock_id"] = df["stock_id"].astype(str).str.strip()
+    return df
+
+
+def get_watchlist_revenue(watchlist: dict) -> pd.DataFrame:
+    """合併上市+上櫃資料，過濾出觀察名單，回傳整理後的DataFrame。
+
+    以代號直接對兩個市場的 CSV 過濾（同一代號只會出現在其中一邊），
+    不再依賴人工維護的市場別欄位，避免上市/上櫃設定錯誤漏抓。
+    """
+    target_ids = set(watchlist.keys())
+    all_rows = []
+    found_ids = set()
+
+    for market in ("TWSE", "TPEx"):
+        df = fetch_revenue_csv(market)
+        if df.empty:
+            continue
+
+        matched = df[df["stock_id"].isin(target_ids)].copy()
+        if not matched.empty:
+            found_ids |= set(matched["stock_id"].tolist())
+            all_rows.append(matched)
+
+    missing_ids = target_ids - found_ids
+    if missing_ids:
+        preview = sorted(missing_ids)[:10]
+        print(f"  ⚠️ 有 {len(missing_ids)} 檔在兩個市場的月營收CSV都找不到"
+              f"（例如 {preview}），可能是當月資料尚未公告、興櫃/ETF、或代號有誤")
+
+    if not all_rows:
+        return pd.DataFrame()
+
+    result = pd.concat(all_rows, ignore_index=True)
+
+    numeric_cols = [
+        "revenue_this_month", "revenue_last_month", "revenue_same_month_last_year",
+        "mom_pct", "yoy_pct", "cumulative_revenue",
+        "cumulative_revenue_last_year", "cumulative_yoy_pct",
+    ]
+    for col in numeric_cols:
+        result[col] = pd.to_numeric(result[col], errors="coerce")
+
+    return result.sort_values("stock_id").reset_index(drop=True)
+
+
+# ══════════ 重複資料檢查 ══════════
+def get_existing_keys(sheet) -> set:
+    """讀取Sheet既有的(代號, 資料年月)組合，避免同一個月重複寫入。"""
+    try:
+        records = sheet.get_all_values()
+    except Exception as e:
+        print(f"  讀取既有資料失敗（視為空表）: {e}")
+        return set()
+
+    if len(records) < 2:
+        return set()
+
+    header = records[0]
+    try:
+        ym_idx = header.index("資料年月")
+        id_idx = header.index("代號")
+    except ValueError:
+        print("  既有表頭欄位跟預期不符，無法比對重複，本次將直接附加全部資料")
+        return set()
+
+    keys = set()
+    for row in records[1:]:
+        if len(row) > max(ym_idx, id_idx):
+            keys.add((row[id_idx].strip(), row[ym_idx].strip()))
+    return keys
+
+
+# ══════════ 寫入試算表 ══════════
+def write_to_sheets(wb, df: pd.DataFrame, watchlist: dict):
     try:
         sheet = wb.worksheet(SHEET_NAME)
     except gspread.WorksheetNotFound:
-        # 分頁不存在就新建
-        sheet = wb.add_worksheet(title=SHEET_NAME, rows=10000, cols=10)
-        headers = ["日期","代號","名稱","市場",
-                   "外資買賣超(張)","投信買賣超(張)","自營商買賣超(張)",
-                   "三法人合計(張)","更新時間"]
-        sheet.append_row(headers)
+        sheet = wb.add_worksheet(title=SHEET_NAME, rows=1000, cols=len(SHEET_HEADERS))
+        sheet.append_row(SHEET_HEADERS)
         print(f"已建立「{SHEET_NAME}」分頁")
 
-    # 確認今日資料是否已存在
-    existing = sheet.col_values(1)  # 第 1 欄（日期）
-    if date_label in existing:
-        print(f"{date_label} 資料已存在，跳過寫入")
-        return
+    existing_keys = get_existing_keys(sheet)
 
-    now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
-    rows = []
-    for d in all_data:
-        rows.append([
-            date_label,
-            d["code"],
-            d["name"],
-            d["market"],
-            d["foreign"],
-            d["sitc"],
-            d["dealer"],
-            d["total"],
-            now_str
+    now_str = datetime.now(TAIPEI_TZ).strftime("%Y-%m-%d %H:%M")
+    new_rows = []
+    skipped = 0
+
+    for _, r in df.iterrows():
+        key = (str(r["stock_id"]).strip(), str(r["data_ym"]).strip())
+        if key in existing_keys:
+            skipped += 1
+            continue
+        code = str(r["stock_id"]).strip()
+        name = watchlist.get(code) or r.get("company_name", "")
+        new_rows.append([
+            now_str, r["data_ym"], code, name,
+            r["revenue_this_month"], r["mom_pct"], r["yoy_pct"],
+            r["cumulative_revenue"], r["cumulative_yoy_pct"],
         ])
 
-    if rows:
-        # 在第 2 列前插入新資料（最新在最上方）
-        # gspread 沒有直接 insertRows，用 insert_rows 方法
-        sheet.insert_rows(rows, row=2)
-        print(f"✅ 寫入 {len(rows)} 筆，日期 {date_label}")
+    if skipped:
+        print(f"  {skipped} 筆資料月份已存在，跳過避免重複")
 
-    # 清理超過 HISTORY_DAYS 的舊資料
-    prune_old_data(sheet)
-
-# ══════════ 清理舊資料 ══════════
-def prune_old_data(sheet):
-    """保留最近 HISTORY_DAYS 個交易日的資料"""
-    all_values = sheet.get_all_values()
-    if len(all_values) < 2:
+    if not new_rows:
+        print("✅ 沒有新月份資料需要寫入（本月資料已是最新）")
         return
 
-    # 找出所有不重複的日期（跳過表頭）
-    dates = sorted(set(
-        row[0] for row in all_values[1:] if row[0]
-    ), reverse=True)
+    sheet.append_rows(new_rows, value_input_option="USER_ENTERED")
+    print(f"✅ 新增 {len(new_rows)} 筆月營收資料至「{SHEET_NAME}」分頁")
 
-    if len(dates) <= HISTORY_DAYS:
-        return
-
-    cutoff = dates[HISTORY_DAYS - 1]
-    rows_to_delete = []
-    for i, row in enumerate(all_values[1:], start=2):
-        if row[0] and row[0] < cutoff:
-            rows_to_delete.append(i)
-
-    if not rows_to_delete:
-        return
-
-    # Batch contiguous row deletions to avoid Google Sheets write quota errors.
-    ranges = []
-    start = prev = rows_to_delete[0]
-    for row_num in rows_to_delete[1:]:
-        if row_num == prev + 1:
-            prev = row_num
-            continue
-        ranges.append((start, prev))
-        start = prev = row_num
-    ranges.append((start, prev))
-
-    for start, end in reversed(ranges):
-        sheet.delete_rows(start, end)
-        time.sleep(1)
-
-    print(f"清理舊資料：刪除 {len(rows_to_delete)} 列（{cutoff} 之前）")
 
 # ══════════ 主程式 ══════════
 def main():
     print("=" * 50)
-    print("台股三大法人資料抓取開始")
+    print("觀察名單月營收抓取開始")
     print("=" * 50)
 
-    # 取得最近交易日
-    date_str, date_label = get_last_trading_date()
-    print(f"目標日期：{date_label}（{date_str}）")
+    wb = connect_sheets()
+    watchlist = load_watchlist(wb)
 
-    # 抓資料（TWSE 和 TPEX 各試一次，失敗往前一天）
-    all_data = []
-    for days_back in range(6):
-        d = datetime.strptime(date_str, "%Y%m%d") - timedelta(days=days_back)
-        if d.weekday() >= 5:
-            continue
-        ds = d.strftime("%Y%m%d")
-        dl = d.strftime("%Y-%m-%d")
+    df = get_watchlist_revenue(watchlist)
 
-        twse = fetch_twse_chips(ds)
-        time.sleep(2)
-        tpex = fetch_tpex_chips(ds)
-
-        all_data = twse + tpex
-        if all_data:
-            date_label = dl
-            print(f"成功取得 {dl} 資料，共 {len(all_data)} 檔")
-            break
-        else:
-            print(f"{dl} 無資料，往前找...")
-            time.sleep(3)
-
-    if not all_data:
-        print("❌ 近 6 個交易日均無資料，結束")
+    if df.empty:
+        print("❌ 沒有抓到任何資料，結束（可能是當月資料尚未公告）")
         return
 
-    # 連接 Google Sheets 並寫入
-    print("\n連接 Google Sheets...")
-    wb = connect_sheets()
-    write_to_sheets(wb, all_data, date_label)
-    print("\n✅ 全部完成！")
+    data_periods = df["data_ym"].unique().tolist()
+    print(f"成功抓到 {len(df)} 檔股票資料，資料年月：{data_periods}")
+    print(df[["data_ym", "stock_id", "revenue_this_month", "yoy_pct"]].head(20).to_string(index=False))
+    if len(df) > 20:
+        print(f"  ...（其餘 {len(df) - 20} 檔省略顯示）")
+
+    write_to_sheets(wb, df, watchlist)
+
+    print("\n" + "=" * 50)
+    print("完成")
+    print("=" * 50)
+
 
 if __name__ == "__main__":
     main()
