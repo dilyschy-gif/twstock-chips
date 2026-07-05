@@ -4,8 +4,12 @@ fetch_chips.py — v2（TPEX 補上 Referer 標頭）
 每日自動抓取 TWSE + TPEX 三大法人買賣超資料
 並寫入 Google Sheets「籌碼面資料」分頁
 
-執行環境：GitHub Actions（每天台灣時間 14:35 自動執行）
+執行環境：GitHub Actions（cron 35 8 * * 1-5 UTC＝每個交易日台灣時間 16:35 自動執行）
 資料來源：TWSE T86 + TPEX（官方免費，不需要帳號）
+
+排程時間說明（勿改早於 16:05）：
+  三大法人資料收盤後分批公布——投信約 15:00、外資與自營商約 16:00 完整揭曉。
+  16:35 執行可確保抓到完整資料，並趕在 17:00 主掃描之前寫入完成。
 
 v2 改動：
   fetch_tpex_chips() 補上 Referer、Accept、X-Requested-With 標頭。
@@ -17,9 +21,11 @@ import requests
 import json
 import time
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import gspread
 from google.oauth2.service_account import Credentials
+
+TAIPEI_TZ = timezone(timedelta(hours=8))
 
 # ══════════ 設定區 ══════════
 SHEET_NAME      = "籌碼面資料"   # Google Sheets 分頁名稱
@@ -29,8 +35,12 @@ HISTORY_DAYS    = 20             # 保留幾個交易日的歷史
 
 # ══════════ 取得最近交易日 ══════════
 def get_last_trading_date():
-    """取得最近一個交易日（排除週六、週日）"""
-    d = datetime.now()
+    """取得最近一個交易日（排除週六、週日）。
+
+    2026-07 修正：明確使用台北時區。GitHub Actions 主機在 UTC，
+    若排程改到台北早上（UTC 仍是前一天），datetime.now() 會抓錯日期。
+    """
+    d = datetime.now(TAIPEI_TZ)
     # 若現在是週六(5)往回1天，週日(6)往回2天
     while d.weekday() >= 5:
         d -= timedelta(days=1)
