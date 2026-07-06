@@ -1,0 +1,22 @@
+name: Backfill Chips（歷史回補，手動執行一次）
+on:
+  workflow_dispatch:
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 下載程式碼
+        uses: actions/checkout@v4
+      - name: 設定 Python 環境
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: 安裝套件
+        run: |
+          pip install requests gspread google-auth
+      - name: 回補 20 個交易日籌碼資料
+        env:
+          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+        run: |
+          python fetch_chips.py --backfill 20
