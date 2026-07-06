@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-fetch_chips.py — v4（TWSE 反 WAF 重試 + TPEX 新版 POST 端點）
+fetch_chips.py — v4.1（TWSE 反 WAF 重試 + TPEX 新版 POST 端點 + 日期×市場去重）
 每日自動抓取 TWSE + TPEX 三大法人買賣超資料
 並寫入 Google Sheets「籌碼面資料」分頁
 執行環境：GitHub Actions（cron 35 8 * * 1-5 UTC＝每個交易日台灣時間 16:35 自動執行）
@@ -272,14 +272,21 @@ def write_to_sheets(wb, all_data, date_label, prune=True):
                    "三法人合計(張)","更新時間"]
         sheet.append_row(headers)
         print(f"已建立「{SHEET_NAME}」分頁")
-    # 確認今日資料是否已存在
-    existing = sheet.col_values(1)  # 第 1 欄（日期）
-    if date_label in existing:
-        print(f"{date_label} 資料已存在，跳過寫入")
-        return
+    # 確認資料是否已存在
+    # v4.1 修正：改為「日期＋市場」去重。原本只比對日期，
+    # 導致 TPEX 修好之前寫入的日期（只有上市）永遠補不進上櫃資料。
+    all_values = sheet.get_all_values()
+    existing_pairs = set()
+    for row in all_values[1:]:
+        if len(row) >= 4 and row[0]:
+            existing_pairs.add((str(row[0]).strip(), str(row[3]).strip()))
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
     rows = []
+    skipped_markets = set()
     for d in all_data:
+        if (date_label, d["market"]) in existing_pairs:
+            skipped_markets.add(d["market"])
+            continue
         rows.append([
             date_label,
             d["code"],
@@ -291,11 +298,16 @@ def write_to_sheets(wb, all_data, date_label, prune=True):
             d["total"],
             now_str
         ])
+    if skipped_markets:
+        print(f"{date_label} 已有 {'、'.join(sorted(skipped_markets))} 資料，該部分跳過")
     if rows:
         # 在第 2 列前插入新資料（最新在最上方）
         # gspread 沒有直接 insertRows，用 insert_rows 方法
         sheet.insert_rows(rows, row=2)
         print(f"✅ 寫入 {len(rows)} 筆，日期 {date_label}")
+    else:
+        print(f"{date_label} 資料已存在，跳過寫入")
+        return
     # 清理超過 HISTORY_DAYS 的舊資料
     if prune:
         prune_old_data(sheet)
