@@ -15,7 +15,7 @@ TWSE T86 API ─┐
 TPEX dailyTrade ─┴→ fetch_chips.py（16:35）→ Google Sheet「籌碼面資料」（滾動 20 交易日）
                                                     ↓
 mopsfin 月營收 CSV → monthly_revenue_fetch.py → 「月營收」分頁    ↓
-                                        main_stock_scanner.py（17:05 主掃描）
+                                        main_stock_scanner.py（17:00 主掃描）
                                                     ↓
                                     「選股結果」分頁（badges 含投信連買N日）
                                                     ↓
@@ -101,7 +101,7 @@ mopsfin 月營收 CSV → monthly_revenue_fetch.py → 「月營收」分頁    
 4. **Update Cloudflare Pages data**（~16 秒）
 5. 依「標準檢驗流程」四步驗收
 
-一步跑完再跑下一步。平日自動排程順序：16:35 籌碼 → 17:05 主掃描 → data.json 更新。
+一步跑完再跑下一步。每日自動排程順序：16:35 籌碼 → 17:00 主掃描 → data.json 更新。
 
 ## 紀律條款（R2 條款）
 
