@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-10T17:00:53.147670+00:00",
+  "generated_at": "2026-07-10T17:17:33.671512+00:00",
   "source": "Google Sheet",
   "sheet_id": "1lxp1HcYfYP_vO7r9vKiI5YYmmPyVCHXIx80qkTuQ1D4",
   "sheet_tab": "選股結果",
@@ -1302,6 +1302,24 @@
       "relative_score": 0.0
     },
     {
+      "code": "1227",
+      "name": "佳格",
+      "signal": "watch",
+      "score": 70.0,
+      "note": "收斂觀察；觀察、法人買超、N字突破、帶寬收斂；2026-07-09 三法人合計218張；外資219；投信-1；自營商0；投信連買0日；外資連買1日；合計連買1日；未創波段新高",
+      "mode": "main",
+      "market": "上市",
+      "industry": "02",
+      "price": 29.75,
+      "category": "觀察",
+      "badges": "觀察、法人買超、N字突破、帶寬收斂",
+      "market_light": "",
+      "tech_score": 50.0,
+      "chips_score": 10.0,
+      "vol_score": 10.0,
+      "relative_score": 0.0
+    },
+    {
       "code": "1256",
       "name": "鮮活果汁-KY",
       "signal": "watch",
@@ -2595,6 +2613,24 @@
       "tech_score": 20.0,
       "chips_score": 28.0,
       "vol_score": 10.0,
+      "relative_score": 0.0
+    },
+    {
+      "code": "2441",
+      "name": "超豐",
+      "signal": "watch",
+      "score": 58.0,
+      "note": "多頭觀察；觀察、法人買超、投信連買5日、量能放大；2026-07-09 三法人合計3573張；外資3253；投信27；自營商294；投信連買7日；外資連買1日；合計連買1日；未突破N字頸線；未創波段新高；分數未達正式門檻",
+      "mode": "main",
+      "market": "上市",
+      "industry": "24",
+      "price": 144.5,
+      "category": "觀察",
+      "badges": "觀察、法人買超、投信連買5日、量能放大",
+      "market_light": "",
+      "tech_score": 10.0,
+      "chips_score": 28.0,
+      "vol_score": 20.0,
       "relative_score": 0.0
     },
     {
@@ -5694,6 +5730,24 @@
       "relative_score": 0.0
     },
     {
+      "code": "6811",
+      "name": "宏碁資訊",
+      "signal": "watch",
+      "score": 35.0,
+      "note": "多頭觀察；觀察、法人買超、外資連買5日；2026-07-09 三法人合計33張；外資32；投信0；自營商1；投信連買0日；外資連買9日；合計連買9日；未突破N字頸線；未創波段新高；成交量低於300張；分數未達正式門檻",
+      "mode": "main",
+      "market": "上櫃",
+      "industry": "36",
+      "price": 226.0,
+      "category": "觀察",
+      "badges": "觀察、法人買超、外資連買5日",
+      "market_light": "",
+      "tech_score": 20.0,
+      "chips_score": 15.0,
+      "vol_score": 0.0,
+      "relative_score": 0.0
+    },
+    {
       "code": "2408",
       "name": "南亞科",
       "signal": "watch",
@@ -6081,6 +6135,24 @@
       "market": "上市",
       "industry": "04",
       "price": 17.3,
+      "category": "觀察",
+      "badges": "觀察、法人買超、帶寬收斂",
+      "market_light": "",
+      "tech_score": 20.0,
+      "chips_score": 10.0,
+      "vol_score": 0.0,
+      "relative_score": 0.0
+    },
+    {
+      "code": "1517",
+      "name": "利奇",
+      "signal": "watch",
+      "score": 30.0,
+      "note": "收斂觀察；觀察、法人買超、帶寬收斂；2026-07-09 三法人合計10張；外資19；投信0；自營商-9；投信連買0日；外資連買1日；合計連買1日；未突破N字頸線；未創波段新高；成交量低於300張；分數未達正式門檻",
+      "mode": "main",
+      "market": "上市",
+      "industry": "05",
+      "price": 10.7,
       "category": "觀察",
       "badges": "觀察、法人買超、帶寬收斂",
       "market_light": "",
@@ -12990,7 +13062,7 @@
     "main": {
       "label": "主升段",
       "sheet_tab": "選股結果",
-      "count": 457
+      "count": 461
     },
     "contrarian": {
       "label": "逆勢抗跌",
