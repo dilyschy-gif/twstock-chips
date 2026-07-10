@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-10T16:58:43.179738+00:00",
+  "generated_at": "2026-07-10T17:00:53.147670+00:00",
   "source": "Google Sheet",
   "sheet_id": "1lxp1HcYfYP_vO7r9vKiI5YYmmPyVCHXIx80qkTuQ1D4",
   "sheet_tab": "選股結果",
@@ -8648,24 +8648,6 @@
       "relative_score": 15.0
     },
     {
-      "code": "2441",
-      "name": "超豐",
-      "signal": "watch",
-      "score": 65.0,
-      "note": "平燈；多頭觀察",
-      "mode": "contrarian",
-      "market": "",
-      "industry": "",
-      "price": 144.5,
-      "category": "",
-      "badges": "",
-      "market_light": "平燈",
-      "tech_score": 0.0,
-      "chips_score": 0.0,
-      "vol_score": 0.0,
-      "relative_score": 20.0
-    },
-    {
       "code": "3532",
       "name": "台勝科",
       "signal": "watch",
@@ -11744,24 +11726,6 @@
       "relative_score": 5.0
     },
     {
-      "code": "1227",
-      "name": "佳格",
-      "signal": "watch",
-      "score": 40.0,
-      "note": "平燈；收斂觀察",
-      "mode": "contrarian",
-      "market": "",
-      "industry": "",
-      "price": 29.75,
-      "category": "",
-      "badges": "",
-      "market_light": "平燈",
-      "tech_score": 0.0,
-      "chips_score": 0.0,
-      "vol_score": 0.0,
-      "relative_score": 5.0
-    },
-    {
       "code": "4142",
       "name": "國光生",
       "signal": "watch",
@@ -13031,7 +12995,7 @@
     "contrarian": {
       "label": "逆勢抗跌",
       "sheet_tab": "逆勢抗跌掃描",
-      "count": 266
+      "count": 264
     }
   }
 }
