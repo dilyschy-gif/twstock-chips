@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-10T16:52:29.572658+00:00",
+  "generated_at": "2026-07-10T16:55:06.885450+00:00",
   "source": "Google Sheet",
   "sheet_id": "1lxp1HcYfYP_vO7r9vKiI5YYmmPyVCHXIx80qkTuQ1D4",
   "sheet_tab": "選股結果",
@@ -12752,6 +12752,24 @@
       "relative_score": 0.0
     },
     {
+      "code": "3055",
+      "name": "蔚華科",
+      "signal": "risk",
+      "score": 30.0,
+      "note": "平燈；多頭觀察",
+      "mode": "contrarian",
+      "market": "",
+      "industry": "",
+      "price": 158.0,
+      "category": "",
+      "badges": "",
+      "market_light": "平燈",
+      "tech_score": 0.0,
+      "chips_score": 0.0,
+      "vol_score": 0.0,
+      "relative_score": 0.0
+    },
+    {
       "code": "3717",
       "name": "聯嘉投控",
       "signal": "risk",
@@ -13085,7 +13103,7 @@
     "contrarian": {
       "label": "逆勢抗跌",
       "sheet_tab": "逆勢抗跌掃描",
-      "count": 265
+      "count": 266
     }
   }
 }
