@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-11T12:54:35.769336+00:00",
+  "generated_at": "2026-07-12T12:16:36.515158+00:00",
   "source": "Google Sheet",
   "sheet_id": "1lxp1HcYfYP_vO7r9vKiI5YYmmPyVCHXIx80qkTuQ1D4",
   "sheet_tab": "選股結果",
@@ -501,6 +501,24 @@
       "market": "上市",
       "industry": "25",
       "price": 394.0,
+      "category": "觀察",
+      "badges": "觀察、法人買超、外資連買5日、N字突破",
+      "market_light": "",
+      "tech_score": 50.0,
+      "chips_score": 18.0,
+      "vol_score": 0.0,
+      "relative_score": 0.0
+    },
+    {
+      "code": "7610",
+      "name": "聯友金屬-創",
+      "signal": "watch",
+      "score": 68.0,
+      "note": "多頭觀察；觀察、法人買超、外資連買5日、N字突破；2026-07-09 三法人合計177張；外資176；投信0；自營商0；投信連買0日；外資連買13日；合計連買13日；未創波段新高；成交量低於300張",
+      "mode": "main",
+      "market": "上市",
+      "industry": "35",
+      "price": 2208.22,
       "category": "觀察",
       "badges": "觀察、法人買超、外資連買5日、N字突破",
       "market_light": "",
@@ -2850,6 +2868,24 @@
       "relative_score": 0.0
     },
     {
+      "code": "6951",
+      "name": "青新-創",
+      "signal": "watch",
+      "score": 40.0,
+      "note": "收斂觀察；觀察、法人買超、帶寬收斂；2026-07-09 三法人合計2張；外資7；投信0；自營商-5；投信連買0日；外資連買1日；合計連買1日；未突破N字頸線；未創波段新高；成交量低於300張；分數未達正式門檻",
+      "mode": "main",
+      "market": "上市",
+      "industry": "35",
+      "price": 69.62,
+      "category": "觀察",
+      "badges": "觀察、法人買超、帶寬收斂",
+      "market_light": "",
+      "tech_score": 30.0,
+      "chips_score": 10.0,
+      "vol_score": 0.0,
+      "relative_score": 0.0
+    },
+    {
       "code": "9802",
       "name": "鈺齊-KY",
       "signal": "watch",
@@ -3476,24 +3512,6 @@
       "market_light": "",
       "tech_score": 10.0,
       "chips_score": 28.0,
-      "vol_score": 0.0,
-      "relative_score": 0.0
-    },
-    {
-      "code": "7610",
-      "name": "聯友金屬-創",
-      "signal": "watch",
-      "score": 38.0,
-      "note": "多頭觀察；觀察、法人買超、外資連買5日；2026-07-09 三法人合計177張；外資176；投信0；自營商0；投信連買0日；外資連買13日；合計連買13日；未突破N字頸線；未創波段新高；成交量低於300張；分數未達正式門檻",
-      "mode": "main",
-      "market": "上市",
-      "industry": "35",
-      "price": 2208.22,
-      "category": "觀察",
-      "badges": "觀察、法人買超、外資連買5日",
-      "market_light": "",
-      "tech_score": 20.0,
-      "chips_score": 18.0,
       "vol_score": 0.0,
       "relative_score": 0.0
     },
@@ -6240,7 +6258,7 @@
     "main": {
       "label": "主升段",
       "sheet_tab": "選股結果",
-      "count": 345
+      "count": 346
     },
     "contrarian": {
       "label": "逆勢抗跌",
