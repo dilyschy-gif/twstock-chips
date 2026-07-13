@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-13T17:37:35.982201+00:00",
+  "generated_at": "2026-07-13T17:38:52.588598+00:00",
   "source": "Google Sheet",
   "sheet_id": "1lxp1HcYfYP_vO7r9vKiI5YYmmPyVCHXIx80qkTuQ1D4",
   "sheet_tab": "選股結果",
@@ -7154,24 +7154,6 @@
       "relative_score": 5.0
     },
     {
-      "code": "9934",
-      "name": "成霖",
-      "signal": "watch",
-      "score": 40.0,
-      "note": "平燈；收斂觀察",
-      "mode": "contrarian",
-      "market": "",
-      "industry": "",
-      "price": 10.3,
-      "category": "",
-      "badges": "",
-      "market_light": "平燈",
-      "tech_score": 0.0,
-      "chips_score": 0.0,
-      "vol_score": 0.0,
-      "relative_score": 5.0
-    },
-    {
       "code": "2528",
       "name": "皇普",
       "signal": "risk",
@@ -8621,7 +8603,7 @@
     "contrarian": {
       "label": "逆勢抗跌",
       "sheet_tab": "逆勢抗跌掃描",
-      "count": 172
+      "count": 171
     }
   }
 }
