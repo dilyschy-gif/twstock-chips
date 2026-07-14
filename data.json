@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-14T15:24:11.628357+00:00",
+  "generated_at": "2026-07-14T15:25:03.510487+00:00",
   "source": "Google Sheet",
   "sheet_id": "1lxp1HcYfYP_vO7r9vKiI5YYmmPyVCHXIx80qkTuQ1D4",
   "sheet_tab": "選股結果",
@@ -10322,24 +10322,6 @@
       "relative_score": 20.0
     },
     {
-      "code": "2231",
-      "name": "為升",
-      "signal": "watch",
-      "score": 57.0,
-      "note": "平燈；多頭觀察",
-      "mode": "contrarian",
-      "market": "",
-      "industry": "",
-      "price": 116.5,
-      "category": "",
-      "badges": "",
-      "market_light": "平燈",
-      "tech_score": 0.0,
-      "chips_score": 0.0,
-      "vol_score": 0.0,
-      "relative_score": 20.0
-    },
-    {
       "code": "8261",
       "name": "富鼎",
       "signal": "watch",
@@ -14741,7 +14723,7 @@
     "contrarian": {
       "label": "逆勢抗跌",
       "sheet_tab": "逆勢抗跌掃描",
-      "count": 279
+      "count": 278
     }
   }
 }
