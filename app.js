@@ -12,6 +12,8 @@ let dataSource = "Demo";
 let datasetMeta = {};
 let chartState = null;
 let chartRangeDays = 60;
+let chartTooltipPinned = false;
+let chartTouchStart = null;
 
 const chartColors = {
   up: "#dc2626",
@@ -269,6 +271,8 @@ async function loadChart(stock, days) {
   elements.chartStatus.hidden = false;
   elements.chartStats.innerHTML = "";
   elements.chartTooltip.hidden = true;
+  chartTooltipPinned = false;
+  chartTouchStart = null;
   chartState = null;
   clearChart();
 
@@ -308,6 +312,8 @@ function closeChart() {
   elements.chartModal.classList.remove("open");
   elements.chartModal.setAttribute("aria-hidden", "true");
   elements.chartTooltip.hidden = true;
+  chartTooltipPinned = false;
+  chartTouchStart = null;
 }
 
 function clearChart() {
@@ -568,10 +574,45 @@ function showChartTooltip(event) {
 }
 
 function hideChartTooltip() {
+  if (!chartState || chartTooltipPinned) return;
+  clearChartTooltip();
+}
+
+function clearChartTooltip() {
   if (!chartState) return;
+  chartTooltipPinned = false;
   chartState.hoverIndex = null;
   elements.chartTooltip.hidden = true;
   drawChart();
+}
+
+function handleChartPointerMove(event) {
+  if (event.pointerType && event.pointerType !== "mouse") return;
+  chartTooltipPinned = false;
+  showChartTooltip(event);
+}
+
+function handleChartPointerDown(event) {
+  if (event.pointerType === "mouse") return;
+  chartTouchStart = {
+    pointerId: event.pointerId,
+    clientX: event.clientX,
+    clientY: event.clientY
+  };
+}
+
+function handleChartPointerUp(event) {
+  if (!chartTouchStart || chartTouchStart.pointerId !== event.pointerId) return;
+  const movedX = event.clientX - chartTouchStart.clientX;
+  const movedY = event.clientY - chartTouchStart.clientY;
+  chartTouchStart = null;
+  if (Math.hypot(movedX, movedY) > 10) return;
+  chartTooltipPinned = true;
+  showChartTooltip(event);
+}
+
+function handleChartPointerCancel() {
+  chartTouchStart = null;
 }
 
 function setRangeButtons() {
@@ -625,10 +666,16 @@ elements.chartCloseBtn.addEventListener("click", closeChart);
 elements.chartModal.addEventListener("click", (event) => {
   if (event.target === elements.chartModal) closeChart();
 });
+elements.chartModal.addEventListener("pointerdown", (event) => {
+  if (event.target !== elements.chartCanvas) clearChartTooltip();
+});
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && elements.chartModal.classList.contains("open")) closeChart();
 });
-elements.chartCanvas.addEventListener("pointermove", showChartTooltip);
+elements.chartCanvas.addEventListener("pointermove", handleChartPointerMove);
+elements.chartCanvas.addEventListener("pointerdown", handleChartPointerDown);
+elements.chartCanvas.addEventListener("pointerup", handleChartPointerUp);
+elements.chartCanvas.addEventListener("pointercancel", handleChartPointerCancel);
 elements.chartCanvas.addEventListener("pointerleave", hideChartTooltip);
 window.addEventListener("resize", () => {
   if (chartState && elements.chartModal.classList.contains("open")) drawChart();
