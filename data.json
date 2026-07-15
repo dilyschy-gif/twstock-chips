@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-15T15:21:32.874923+00:00",
+  "generated_at": "2026-07-15T15:24:16.889581+00:00",
   "source": "Google Sheet",
   "sheet_id": "1lxp1HcYfYP_vO7r9vKiI5YYmmPyVCHXIx80qkTuQ1D4",
   "sheet_tab": "選股結果",
@@ -12734,24 +12734,6 @@
       "relative_score": 20.0
     },
     {
-      "code": "4939",
-      "name": "亞電",
-      "signal": "watch",
-      "score": 57.0,
-      "note": "平燈；多頭觀察",
-      "mode": "contrarian",
-      "market": "",
-      "industry": "",
-      "price": 60.8,
-      "category": "",
-      "badges": "",
-      "market_light": "平燈",
-      "tech_score": 0.0,
-      "chips_score": 0.0,
-      "vol_score": 0.0,
-      "relative_score": 20.0
-    },
-    {
       "code": "5460",
       "name": "同協",
       "signal": "watch",
@@ -12869,24 +12851,6 @@
       "market": "",
       "industry": "",
       "price": 55.6,
-      "category": "",
-      "badges": "",
-      "market_light": "平燈",
-      "tech_score": 0.0,
-      "chips_score": 0.0,
-      "vol_score": 0.0,
-      "relative_score": 20.0
-    },
-    {
-      "code": "4155",
-      "name": "訊映",
-      "signal": "watch",
-      "score": 55.0,
-      "note": "平燈；起漲突破",
-      "mode": "contrarian",
-      "market": "",
-      "industry": "",
-      "price": 16.15,
       "category": "",
       "badges": "",
       "market_light": "平燈",
@@ -13724,24 +13688,6 @@
       "relative_score": 15.0
     },
     {
-      "code": "2476",
-      "name": "鉅祥",
-      "signal": "watch",
-      "score": 52.0,
-      "note": "平燈；收斂觀察",
-      "mode": "contrarian",
-      "market": "",
-      "industry": "",
-      "price": 129.5,
-      "category": "",
-      "badges": "",
-      "market_light": "平燈",
-      "tech_score": 0.0,
-      "chips_score": 0.0,
-      "vol_score": 0.0,
-      "relative_score": 20.0
-    },
-    {
       "code": "2511",
       "name": "太子",
       "signal": "watch",
@@ -14120,42 +14066,6 @@
       "relative_score": 20.0
     },
     {
-      "code": "3052",
-      "name": "夆典",
-      "signal": "watch",
-      "score": 50.0,
-      "note": "平燈；收斂觀察",
-      "mode": "contrarian",
-      "market": "",
-      "industry": "",
-      "price": 10.85,
-      "category": "",
-      "badges": "",
-      "market_light": "平燈",
-      "tech_score": 0.0,
-      "chips_score": 0.0,
-      "vol_score": 0.0,
-      "relative_score": 0.0
-    },
-    {
-      "code": "3680",
-      "name": "家登",
-      "signal": "watch",
-      "score": 50.0,
-      "note": "平燈；多頭觀察",
-      "mode": "contrarian",
-      "market": "",
-      "industry": "",
-      "price": 531.0,
-      "category": "",
-      "badges": "",
-      "market_light": "平燈",
-      "tech_score": 0.0,
-      "chips_score": 0.0,
-      "vol_score": 0.0,
-      "relative_score": 20.0
-    },
-    {
       "code": "1109",
       "name": "信大",
       "signal": "watch",
@@ -14192,24 +14102,6 @@
       "relative_score": 20.0
     },
     {
-      "code": "2103",
-      "name": "台橡",
-      "signal": "watch",
-      "score": 50.0,
-      "note": "平燈；多頭觀察",
-      "mode": "contrarian",
-      "market": "",
-      "industry": "",
-      "price": 25.6,
-      "category": "",
-      "badges": "",
-      "market_light": "平燈",
-      "tech_score": 0.0,
-      "chips_score": 0.0,
-      "vol_score": 0.0,
-      "relative_score": 20.0
-    },
-    {
       "code": "2486",
       "name": "一詮",
       "signal": "watch",
@@ -14219,24 +14111,6 @@
       "market": "",
       "industry": "",
       "price": 257.0,
-      "category": "",
-      "badges": "",
-      "market_light": "平燈",
-      "tech_score": 0.0,
-      "chips_score": 0.0,
-      "vol_score": 0.0,
-      "relative_score": 20.0
-    },
-    {
-      "code": "2606",
-      "name": "裕民",
-      "signal": "watch",
-      "score": 50.0,
-      "note": "平燈；收斂觀察",
-      "mode": "contrarian",
-      "market": "",
-      "industry": "",
-      "price": 64.2,
       "category": "",
       "badges": "",
       "market_light": "平燈",
@@ -14948,24 +14822,6 @@
       "relative_score": 20.0
     },
     {
-      "code": "2002",
-      "name": "中鋼",
-      "signal": "watch",
-      "score": 50.0,
-      "note": "平燈；收斂觀察",
-      "mode": "contrarian",
-      "market": "",
-      "industry": "",
-      "price": 18.65,
-      "category": "",
-      "badges": "",
-      "market_light": "平燈",
-      "tech_score": 0.0,
-      "chips_score": 0.0,
-      "vol_score": 0.0,
-      "relative_score": 15.0
-    },
-    {
       "code": "2017",
       "name": "官田鋼",
       "signal": "watch",
@@ -15108,24 +14964,6 @@
       "chips_score": 0.0,
       "vol_score": 0.0,
       "relative_score": 20.0
-    },
-    {
-      "code": "5521",
-      "name": "工信",
-      "signal": "watch",
-      "score": 50.0,
-      "note": "平燈；收斂觀察",
-      "mode": "contrarian",
-      "market": "",
-      "industry": "",
-      "price": 10.35,
-      "category": "",
-      "badges": "",
-      "market_light": "平燈",
-      "tech_score": 0.0,
-      "chips_score": 0.0,
-      "vol_score": 0.0,
-      "relative_score": 15.0
     },
     {
       "code": "6901",
@@ -15812,24 +15650,6 @@
       "relative_score": 15.0
     },
     {
-      "code": "5210",
-      "name": "寶碩",
-      "signal": "watch",
-      "score": 45.0,
-      "note": "平燈；收斂觀察",
-      "mode": "contrarian",
-      "market": "",
-      "industry": "",
-      "price": 30.85,
-      "category": "",
-      "badges": "",
-      "market_light": "平燈",
-      "tech_score": 0.0,
-      "chips_score": 0.0,
-      "vol_score": 0.0,
-      "relative_score": 20.0
-    },
-    {
       "code": "6664",
       "name": "群翊",
       "signal": "watch",
@@ -15846,24 +15666,6 @@
       "chips_score": 0.0,
       "vol_score": 0.0,
       "relative_score": 20.0
-    },
-    {
-      "code": "1210",
-      "name": "大成",
-      "signal": "watch",
-      "score": 45.0,
-      "note": "平燈；收斂觀察",
-      "mode": "contrarian",
-      "market": "",
-      "industry": "",
-      "price": 58.0,
-      "category": "",
-      "badges": "",
-      "market_light": "平燈",
-      "tech_score": 0.0,
-      "chips_score": 0.0,
-      "vol_score": 0.0,
-      "relative_score": 15.0
     },
     {
       "code": "2022",
@@ -17531,7 +17333,7 @@
     "contrarian": {
       "label": "逆勢抗跌",
       "sheet_tab": "逆勢抗跌掃描",
-      "count": 347
+      "count": 336
     }
   }
 }
