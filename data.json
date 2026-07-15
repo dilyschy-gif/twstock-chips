@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-15T11:02:10.555278+00:00",
+  "generated_at": "2026-07-15T15:20:58.370396+00:00",
   "source": "Google Sheet",
   "sheet_id": "1lxp1HcYfYP_vO7r9vKiI5YYmmPyVCHXIx80qkTuQ1D4",
   "sheet_tab": "選股結果",
@@ -3873,24 +3873,6 @@
       "tech_score": 20.0,
       "chips_score": 10.0,
       "vol_score": 20.0,
-      "relative_score": 0.0
-    },
-    {
-      "code": "2949",
-      "name": "欣新網",
-      "signal": "watch",
-      "score": 50.0,
-      "note": "多頭觀察；觀察、法人買超、N字突破；2026-07-13 三法人合計1張；外資0；投信0；自營商1；投信連買0日；外資連買0日；合計連買1日；未創波段新高；成交量低於300張；分數未達正式門檻",
-      "mode": "main",
-      "market": "上櫃",
-      "industry": "36",
-      "price": 72.3,
-      "category": "觀察",
-      "badges": "觀察、法人買超、N字突破",
-      "market_light": "",
-      "tech_score": 40.0,
-      "chips_score": 10.0,
-      "vol_score": 0.0,
       "relative_score": 0.0
     },
     {
@@ -10119,24 +10101,6 @@
       "tech_score": 20.0,
       "chips_score": 10.0,
       "vol_score": 0.0,
-      "relative_score": 0.0
-    },
-    {
-      "code": "2641",
-      "name": "正德",
-      "signal": "watch",
-      "score": 30.0,
-      "note": "收斂觀察；觀察、法人買超、帶寬收斂；2026-07-15 三法人合計383張；外資384；投信0；自營商0；投信連買0日；外資連買1日；合計連買1日；未突破N字頸線；未創波段新高；分數未達正式門檻",
-      "mode": "main",
-      "market": "上櫃",
-      "industry": "15",
-      "price": 17.7,
-      "category": "觀察",
-      "badges": "觀察、法人買超、帶寬收斂",
-      "market_light": "",
-      "tech_score": 10.0,
-      "chips_score": 10.0,
-      "vol_score": 10.0,
       "relative_score": 0.0
     },
     {
@@ -17652,7 +17616,7 @@
     "main": {
       "label": "主升段",
       "sheet_tab": "選股結果",
-      "count": 633
+      "count": 631
     },
     "contrarian": {
       "label": "逆勢抗跌",
