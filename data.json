@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-18T11:01:24.017554+00:00",
+  "generated_at": "2026-07-19T10:33:08.769478+00:00",
   "source": "Google Sheet",
   "sheet_id": "1lxp1HcYfYP_vO7r9vKiI5YYmmPyVCHXIx80qkTuQ1D4",
   "sheet_tab": "選股結果",
@@ -7746,24 +7746,6 @@
       "relative_score": 0.0
     },
     {
-      "code": "5386",
-      "name": "青雲",
-      "signal": "watch",
-      "score": 30.0,
-      "note": "尚未突破；觀察、法人買超、量能放大；2026-07-17 三法人合計116張；外資65；投信0；自營商51；投信連買0日；外資連買2日；合計連買2日；未突破N字頸線；未創波段新高；分數未達正式門檻",
-      "mode": "main",
-      "market": "上櫃",
-      "industry": "25",
-      "price": 252.0,
-      "category": "觀察",
-      "badges": "觀察、法人買超、量能放大",
-      "market_light": "",
-      "tech_score": 0.0,
-      "chips_score": 10.0,
-      "vol_score": 20.0,
-      "relative_score": 0.0
-    },
-    {
       "code": "5475",
       "name": "德宏",
       "signal": "watch",
@@ -12576,7 +12558,7 @@
     "main": {
       "label": "主升段",
       "sheet_tab": "選股結果",
-      "count": 457
+      "count": 456
     },
     "contrarian": {
       "label": "逆勢抗跌",
