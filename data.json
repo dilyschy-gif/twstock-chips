@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-19T10:33:08.769478+00:00",
+  "generated_at": "2026-07-19T10:35:15.066337+00:00",
   "source": "Google Sheet",
   "sheet_id": "1lxp1HcYfYP_vO7r9vKiI5YYmmPyVCHXIx80qkTuQ1D4",
   "sheet_tab": "選股結果",
@@ -11834,24 +11834,6 @@
       "relative_score": 20.0
     },
     {
-      "code": "5386",
-      "name": "青雲",
-      "signal": "watch",
-      "score": 40.0,
-      "note": "紅燈；尚未突破",
-      "mode": "contrarian",
-      "market": "",
-      "industry": "",
-      "price": 252.0,
-      "category": "",
-      "badges": "",
-      "market_light": "紅燈",
-      "tech_score": 0.0,
-      "chips_score": 0.0,
-      "vol_score": 0.0,
-      "relative_score": 20.0
-    },
-    {
       "code": "5904",
       "name": "寶雅",
       "signal": "watch",
@@ -12563,7 +12545,7 @@
     "contrarian": {
       "label": "逆勢抗跌",
       "sheet_tab": "逆勢抗跌掃描",
-      "count": 241
+      "count": 240
     }
   }
 }
