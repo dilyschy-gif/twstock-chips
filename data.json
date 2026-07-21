@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-21T11:25:32.283314+00:00",
+  "generated_at": "2026-07-21T11:28:05.999890+00:00",
   "source": "Google Sheet",
   "sheet_id": "1lxp1HcYfYP_vO7r9vKiI5YYmmPyVCHXIx80qkTuQ1D4",
   "sheet_tab": "選股結果",
@@ -9242,24 +9242,6 @@
       "relative_score": 20.0
     },
     {
-      "code": "2313",
-      "name": "華通",
-      "signal": "watch",
-      "score": 63.0,
-      "note": "平燈；尚未突破",
-      "mode": "contrarian",
-      "market": "",
-      "industry": "",
-      "price": 210.0,
-      "category": "",
-      "badges": "",
-      "market_light": "平燈",
-      "tech_score": 0.0,
-      "chips_score": 0.0,
-      "vol_score": 0.0,
-      "relative_score": 20.0
-    },
-    {
       "code": "2634",
       "name": "漢翔",
       "signal": "watch",
@@ -9521,24 +9503,6 @@
       "market": "",
       "industry": "",
       "price": 84.4,
-      "category": "",
-      "badges": "",
-      "market_light": "平燈",
-      "tech_score": 0.0,
-      "chips_score": 0.0,
-      "vol_score": 0.0,
-      "relative_score": 20.0
-    },
-    {
-      "code": "8114",
-      "name": "振樺電",
-      "signal": "watch",
-      "score": 57.0,
-      "note": "平燈；多頭觀察",
-      "mode": "contrarian",
-      "market": "",
-      "industry": "",
-      "price": 201.0,
       "category": "",
       "badges": "",
       "market_light": "平燈",
@@ -10286,24 +10250,6 @@
       "relative_score": 20.0
     },
     {
-      "code": "4169",
-      "name": "泰宗",
-      "signal": "watch",
-      "score": 50.0,
-      "note": "平燈；多頭觀察",
-      "mode": "contrarian",
-      "market": "",
-      "industry": "",
-      "price": 280.5,
-      "category": "",
-      "badges": "",
-      "market_light": "平燈",
-      "tech_score": 0.0,
-      "chips_score": 0.0,
-      "vol_score": 0.0,
-      "relative_score": 20.0
-    },
-    {
       "code": "4564",
       "name": "元翎",
       "signal": "watch",
@@ -10853,24 +10799,6 @@
       "market": "",
       "industry": "",
       "price": 19.1,
-      "category": "",
-      "badges": "",
-      "market_light": "平燈",
-      "tech_score": 0.0,
-      "chips_score": 0.0,
-      "vol_score": 0.0,
-      "relative_score": 0.0
-    },
-    {
-      "code": "2603",
-      "name": "長榮",
-      "signal": "watch",
-      "score": 45.0,
-      "note": "平燈；多頭觀察",
-      "mode": "contrarian",
-      "market": "",
-      "industry": "",
-      "price": 203.0,
       "category": "",
       "badges": "",
       "market_light": "平燈",
@@ -11996,6 +11924,24 @@
       "relative_score": 0.0
     },
     {
+      "code": "6177",
+      "name": "達麗",
+      "signal": "risk",
+      "score": 35.0,
+      "note": "平燈；收斂觀察",
+      "mode": "contrarian",
+      "market": "",
+      "industry": "",
+      "price": 47.55,
+      "category": "",
+      "badges": "",
+      "market_light": "平燈",
+      "tech_score": 0.0,
+      "chips_score": 0.0,
+      "vol_score": 0.0,
+      "relative_score": 0.0
+    },
+    {
       "code": "5511",
       "name": "德昌",
       "signal": "risk",
@@ -12239,6 +12185,24 @@
       "market": "",
       "industry": "",
       "price": 13.4,
+      "category": "",
+      "badges": "",
+      "market_light": "平燈",
+      "tech_score": 0.0,
+      "chips_score": 0.0,
+      "vol_score": 0.0,
+      "relative_score": 0.0
+    },
+    {
+      "code": "9911",
+      "name": "櫻花",
+      "signal": "risk",
+      "score": 35.0,
+      "note": "平燈；收斂觀察",
+      "mode": "contrarian",
+      "market": "",
+      "industry": "",
+      "price": 83.2,
       "category": "",
       "badges": "",
       "market_light": "平燈",
@@ -13202,24 +13166,6 @@
       "relative_score": 0.0
     },
     {
-      "code": "2482",
-      "name": "連宇",
-      "signal": "risk",
-      "score": 30.0,
-      "note": "平燈；多頭觀察",
-      "mode": "contrarian",
-      "market": "",
-      "industry": "",
-      "price": 18.45,
-      "category": "",
-      "badges": "",
-      "market_light": "平燈",
-      "tech_score": 0.0,
-      "chips_score": 0.0,
-      "vol_score": 0.0,
-      "relative_score": 0.0
-    },
-    {
       "code": "2617",
       "name": "台航",
       "signal": "risk",
@@ -13409,7 +13355,7 @@
     "contrarian": {
       "label": "逆勢抗跌",
       "sheet_tab": "逆勢抗跌掃描",
-      "count": 240
+      "count": 237
     }
   }
 }
