@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-21T11:10:52.156106+00:00",
+  "generated_at": "2026-07-21T11:13:28.229332+00:00",
   "source": "Google Sheet",
   "sheet_id": "1lxp1HcYfYP_vO7r9vKiI5YYmmPyVCHXIx80qkTuQ1D4",
   "sheet_tab": "選股結果",
@@ -9314,6 +9314,24 @@
       "relative_score": 20.0
     },
     {
+      "code": "1216",
+      "name": "統一",
+      "signal": "watch",
+      "score": 60.0,
+      "note": "平燈；收斂觀察",
+      "mode": "contrarian",
+      "market": "",
+      "industry": "",
+      "price": 79.6,
+      "category": "",
+      "badges": "",
+      "market_light": "平燈",
+      "tech_score": 0.0,
+      "chips_score": 0.0,
+      "vol_score": 0.0,
+      "relative_score": 0.0
+    },
+    {
       "code": "2867",
       "name": "三商壽",
       "signal": "watch",
@@ -9728,6 +9746,24 @@
       "relative_score": 0.0
     },
     {
+      "code": "5288",
+      "name": "豐祥-KY",
+      "signal": "watch",
+      "score": 52.0,
+      "note": "平燈；收斂觀察",
+      "mode": "contrarian",
+      "market": "",
+      "industry": "",
+      "price": 197.0,
+      "category": "",
+      "badges": "",
+      "market_light": "平燈",
+      "tech_score": 0.0,
+      "chips_score": 0.0,
+      "vol_score": 0.0,
+      "relative_score": 20.0
+    },
+    {
       "code": "2886",
       "name": "兆豐金",
       "signal": "watch",
@@ -9773,6 +9809,24 @@
       "market": "",
       "industry": "",
       "price": 22.0,
+      "category": "",
+      "badges": "",
+      "market_light": "平燈",
+      "tech_score": 0.0,
+      "chips_score": 0.0,
+      "vol_score": 0.0,
+      "relative_score": 0.0
+    },
+    {
+      "code": "5525",
+      "name": "順天",
+      "signal": "watch",
+      "score": 50.0,
+      "note": "平燈；收斂觀察",
+      "mode": "contrarian",
+      "market": "",
+      "industry": "",
+      "price": 23.3,
       "category": "",
       "badges": "",
       "market_light": "平燈",
@@ -11366,6 +11420,24 @@
       "relative_score": 0.0
     },
     {
+      "code": "2915",
+      "name": "潤泰全",
+      "signal": "watch",
+      "score": 42.0,
+      "note": "平燈；收斂觀察",
+      "mode": "contrarian",
+      "market": "",
+      "industry": "",
+      "price": 52.0,
+      "category": "",
+      "badges": "",
+      "market_light": "平燈",
+      "tech_score": 0.0,
+      "chips_score": 0.0,
+      "vol_score": 0.0,
+      "relative_score": 0.0
+    },
+    {
       "code": "2890",
       "name": "永豐金",
       "signal": "watch",
@@ -11960,24 +12032,6 @@
       "relative_score": 0.0
     },
     {
-      "code": "6177",
-      "name": "達麗",
-      "signal": "risk",
-      "score": 35.0,
-      "note": "平燈；收斂觀察",
-      "mode": "contrarian",
-      "market": "",
-      "industry": "",
-      "price": 47.55,
-      "category": "",
-      "badges": "",
-      "market_light": "平燈",
-      "tech_score": 0.0,
-      "chips_score": 0.0,
-      "vol_score": 0.0,
-      "relative_score": 0.0
-    },
-    {
       "code": "5511",
       "name": "德昌",
       "signal": "risk",
@@ -12221,24 +12275,6 @@
       "market": "",
       "industry": "",
       "price": 13.4,
-      "category": "",
-      "badges": "",
-      "market_light": "平燈",
-      "tech_score": 0.0,
-      "chips_score": 0.0,
-      "vol_score": 0.0,
-      "relative_score": 0.0
-    },
-    {
-      "code": "9911",
-      "name": "櫻花",
-      "signal": "risk",
-      "score": 35.0,
-      "note": "平燈；收斂觀察",
-      "mode": "contrarian",
-      "market": "",
-      "industry": "",
-      "price": 83.2,
       "category": "",
       "badges": "",
       "market_light": "平燈",
@@ -12842,6 +12878,24 @@
       "relative_score": 0.0
     },
     {
+      "code": "2059",
+      "name": "川湖",
+      "signal": "risk",
+      "score": 30.0,
+      "note": "平燈；多頭觀察",
+      "mode": "contrarian",
+      "market": "",
+      "industry": "",
+      "price": 7975.0,
+      "category": "",
+      "badges": "",
+      "market_light": "平燈",
+      "tech_score": 0.0,
+      "chips_score": 0.0,
+      "vol_score": 0.0,
+      "relative_score": 0.0
+    },
+    {
       "code": "2211",
       "name": "長榮鋼",
       "signal": "risk",
@@ -13391,7 +13445,7 @@
     "contrarian": {
       "label": "逆勢抗跌",
       "sheet_tab": "逆勢抗跌掃描",
-      "count": 237
+      "count": 240
     }
   }
 }
