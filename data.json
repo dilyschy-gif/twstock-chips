@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-21T11:28:05.999890+00:00",
+  "generated_at": "2026-07-21T11:36:17.041900+00:00",
   "source": "Google Sheet",
   "sheet_id": "1lxp1HcYfYP_vO7r9vKiI5YYmmPyVCHXIx80qkTuQ1D4",
   "sheet_tab": "選股結果",
@@ -1047,6 +1047,24 @@
       "tech_score": 60.0,
       "chips_score": 15.0,
       "vol_score": 0.0,
+      "relative_score": 0.0
+    },
+    {
+      "code": "2603",
+      "name": "長榮",
+      "signal": "watch",
+      "score": 75.0,
+      "note": "多頭觀察；觀察、法人買超、外資連買5日、N字突破、量能放大；2026-07-21 三法人合計9603張；外資10551；投信-1360；自營商411；投信連買0日；外資連買9日；合計連買9日；未創波段新高",
+      "mode": "main",
+      "market": "上市",
+      "industry": "15",
+      "price": 203.0,
+      "category": "觀察",
+      "badges": "觀察、法人買超、外資連買5日、N字突破、量能放大",
+      "market_light": "",
+      "tech_score": 40.0,
+      "chips_score": 15.0,
+      "vol_score": 20.0,
       "relative_score": 0.0
     },
     {
@@ -2108,24 +2126,6 @@
       "market_light": "",
       "tech_score": 20.0,
       "chips_score": 28.0,
-      "vol_score": 10.0,
-      "relative_score": 0.0
-    },
-    {
-      "code": "8415",
-      "name": "大國鋼",
-      "signal": "watch",
-      "score": 58.0,
-      "note": "收斂觀察；觀察、法人買超、外資連買5日、帶寬收斂；2026-07-21 三法人合計234張；外資232；投信0；自營商2；投信連買0日；外資連買11日；合計連買11日；未突破N字頸線；未創波段新高；分數未達正式門檻",
-      "mode": "main",
-      "market": "上櫃",
-      "industry": "10",
-      "price": 36.65,
-      "category": "觀察",
-      "badges": "觀察、法人買超、外資連買5日、帶寬收斂",
-      "market_light": "",
-      "tech_score": 30.0,
-      "chips_score": 18.0,
       "vol_score": 10.0,
       "relative_score": 0.0
     },
@@ -3570,24 +3570,6 @@
       "relative_score": 0.0
     },
     {
-      "code": "6183",
-      "name": "關貿",
-      "signal": "watch",
-      "score": 45.0,
-      "note": "收斂觀察；觀察、法人買超、外資連買5日、帶寬收斂；2026-07-21 三法人合計7張；外資7；投信0；自營商0；投信連買0日；外資連買7日；合計連買7日；未突破N字頸線；未創波段新高；成交量低於300張；分數未達正式門檻",
-      "mode": "main",
-      "market": "上市",
-      "industry": "30",
-      "price": 91.2,
-      "category": "觀察",
-      "badges": "觀察、法人買超、外資連買5日、帶寬收斂",
-      "market_light": "",
-      "tech_score": 30.0,
-      "chips_score": 15.0,
-      "vol_score": 0.0,
-      "relative_score": 0.0
-    },
-    {
       "code": "6281",
       "name": "全國電",
       "signal": "watch",
@@ -4646,6 +4628,24 @@
       "market_light": "",
       "tech_score": 10.0,
       "chips_score": 20.0,
+      "vol_score": 10.0,
+      "relative_score": 0.0
+    },
+    {
+      "code": "4169",
+      "name": "泰宗",
+      "signal": "watch",
+      "score": 40.0,
+      "note": "多頭觀察；觀察、法人買超；2026-07-21 三法人合計6張；外資4；投信0；自營商2；投信連買0日；外資連買1日；合計連買1日；未突破N字頸線；未創波段新高；分數未達正式門檻",
+      "mode": "main",
+      "market": "上市",
+      "industry": "22",
+      "price": 280.5,
+      "category": "觀察",
+      "badges": "觀察、法人買超",
+      "market_light": "",
+      "tech_score": 20.0,
+      "chips_score": 10.0,
       "vol_score": 10.0,
       "relative_score": 0.0
     },
@@ -6594,6 +6594,24 @@
       "relative_score": 0.0
     },
     {
+      "code": "8114",
+      "name": "振樺電",
+      "signal": "watch",
+      "score": 33.0,
+      "note": "多頭觀察；觀察、法人買超；2026-07-21 三法人合計158張；外資155；投信0；自營商3；投信連買0日；外資連買4日；合計連買4日；未突破N字頸線；未創波段新高；分數未達正式門檻",
+      "mode": "main",
+      "market": "上市",
+      "industry": "25",
+      "price": 201.0,
+      "category": "觀察",
+      "badges": "觀察、法人買超",
+      "market_light": "",
+      "tech_score": 10.0,
+      "chips_score": 13.0,
+      "vol_score": 10.0,
+      "relative_score": 0.0
+    },
+    {
       "code": "8210",
       "name": "勤誠",
       "signal": "watch",
@@ -7329,6 +7347,24 @@
       "tech_score": 20.0,
       "chips_score": 10.0,
       "vol_score": 0.0,
+      "relative_score": 0.0
+    },
+    {
+      "code": "2482",
+      "name": "連宇",
+      "signal": "watch",
+      "score": 30.0,
+      "note": "多頭觀察；觀察、法人買超；2026-07-21 三法人合計63張；外資65；投信0；自營商-2；投信連買0日；外資連買1日；合計連買1日；未突破N字頸線；未創波段新高；分數未達正式門檻",
+      "mode": "main",
+      "market": "上市",
+      "industry": "31",
+      "price": 18.45,
+      "category": "觀察",
+      "badges": "觀察、法人買超",
+      "market_light": "",
+      "tech_score": 10.0,
+      "chips_score": 10.0,
+      "vol_score": 10.0,
       "relative_score": 0.0
     },
     {
@@ -9021,24 +9057,6 @@
       "tech_score": 0.0,
       "chips_score": 20.0,
       "vol_score": 10.0,
-      "relative_score": 0.0
-    },
-    {
-      "code": "8085",
-      "name": "福華",
-      "signal": "watch",
-      "score": 30.0,
-      "note": "尚未突破；觀察、法人買超、量能放大；2026-07-21 三法人合計52張；外資52；投信0；自營商0；投信連買0日；外資連買2日；合計連買2日；未突破N字頸線；未創波段新高；分數未達正式門檻",
-      "mode": "main",
-      "market": "上櫃",
-      "industry": "31",
-      "price": 11.35,
-      "category": "觀察",
-      "badges": "觀察、法人買超、量能放大",
-      "market_light": "",
-      "tech_score": 0.0,
-      "chips_score": 10.0,
-      "vol_score": 20.0,
       "relative_score": 0.0
     },
     {
@@ -13350,7 +13368,7 @@
     "main": {
       "label": "主升段",
       "sheet_tab": "選股結果",
-      "count": 504
+      "count": 505
     },
     "contrarian": {
       "label": "逆勢抗跌",
