@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-21T10:26:13.506000+00:00",
+  "generated_at": "2026-07-21T11:10:52.156106+00:00",
   "source": "Google Sheet",
   "sheet_id": "1lxp1HcYfYP_vO7r9vKiI5YYmmPyVCHXIx80qkTuQ1D4",
   "sheet_tab": "選股結果",
@@ -560,24 +560,6 @@
       "market_light": "",
       "tech_score": 60.0,
       "chips_score": 15.0,
-      "vol_score": 10.0,
-      "relative_score": 0.0
-    },
-    {
-      "code": "6177",
-      "name": "達麗",
-      "signal": "watch",
-      "score": 84.0,
-      "note": "收斂觀察；觀察、法人買超、N字突破、帶寬收斂；2026-07-21 三法人合計137張；外資124；投信6；自營商7；投信連買2日；外資連買1日；合計連買7日；未創波段新高",
-      "mode": "main",
-      "market": "上市",
-      "industry": "14",
-      "price": 47.55,
-      "category": "觀察",
-      "badges": "觀察、法人買超、N字突破、帶寬收斂",
-      "market_light": "",
-      "tech_score": 60.0,
-      "chips_score": 14.0,
       "vol_score": 10.0,
       "relative_score": 0.0
     },
@@ -1695,6 +1677,24 @@
       "tech_score": 40.0,
       "chips_score": 13.0,
       "vol_score": 10.0,
+      "relative_score": 0.0
+    },
+    {
+      "code": "2915",
+      "name": "潤泰全",
+      "signal": "watch",
+      "score": 63.0,
+      "note": "收斂觀察；觀察、法人買超、帶寬收斂、量能放大；2026-07-21 三法人合計1782張；外資1783；投信0；自營商0；投信連買0日；外資連買3日；合計連買3日；未突破N字頸線；未創波段新高",
+      "mode": "main",
+      "market": "上市",
+      "industry": "18",
+      "price": 52.0,
+      "category": "觀察",
+      "badges": "觀察、法人買超、帶寬收斂、量能放大",
+      "market_light": "",
+      "tech_score": 30.0,
+      "chips_score": 13.0,
+      "vol_score": 20.0,
       "relative_score": 0.0
     },
     {
@@ -3714,6 +3714,24 @@
       "relative_score": 0.0
     },
     {
+      "code": "2059",
+      "name": "川湖",
+      "signal": "watch",
+      "score": 44.0,
+      "note": "多頭觀察；觀察、法人買超、量能放大；2026-07-21 三法人合計88張；外資66；投信37；自營商-15；投信連買2日；外資連買1日；合計連買1日；未突破N字頸線；未創波段新高；分數未達正式門檻",
+      "mode": "main",
+      "market": "上市",
+      "industry": "28",
+      "price": 7975.0,
+      "category": "觀察",
+      "badges": "觀察、法人買超、量能放大",
+      "market_light": "",
+      "tech_score": 10.0,
+      "chips_score": 14.0,
+      "vol_score": 20.0,
+      "relative_score": 0.0
+    },
+    {
       "code": "2211",
       "name": "長榮鋼",
       "signal": "watch",
@@ -3801,24 +3819,6 @@
       "tech_score": 20.0,
       "chips_score": 14.0,
       "vol_score": 10.0,
-      "relative_score": 0.0
-    },
-    {
-      "code": "9911",
-      "name": "櫻花",
-      "signal": "watch",
-      "score": 44.0,
-      "note": "收斂觀察；觀察、法人買超、帶寬收斂、量能放大；2026-07-21 三法人合計158張；外資160；投信1；自營商-3；投信連買1日；外資連買1日；合計連買1日；未突破N字頸線；未創波段新高；分數未達正式門檻",
-      "mode": "main",
-      "market": "上市",
-      "industry": "38",
-      "price": 83.2,
-      "category": "觀察",
-      "badges": "觀察、法人買超、帶寬收斂、量能放大",
-      "market_light": "",
-      "tech_score": 10.0,
-      "chips_score": 14.0,
-      "vol_score": 20.0,
       "relative_score": 0.0
     },
     {
