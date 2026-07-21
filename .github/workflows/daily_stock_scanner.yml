@@ -32,6 +32,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests gspread google-auth
 
+      - name: Test V-reversal rules
+        run: python -m unittest discover -v
+
       - name: Run main stock scanner
         env:
           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}

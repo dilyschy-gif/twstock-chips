@@ -10,8 +10,12 @@ import json
 import os
 from typing import Dict, List, Optional, Tuple
 
-import gspread
-from google.oauth2.service_account import Credentials
+try:
+    import gspread
+    from google.oauth2.service_account import Credentials
+except ModuleNotFoundError:  # 允許純轉換測試在未安裝 Google 套件時執行
+    gspread = None
+    Credentials = None
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -26,6 +30,14 @@ CONTRARIAN_SHEET_CANDIDATES = [
     for name in os.environ.get(
         "CONTRARIAN_SHEET_NAMES",
         "逆勢抗跌掃描,逆勢抗跌,抗跌掃描,Contrarian,Contrarian Scanner",
+    ).split(",")
+    if name.strip()
+]
+V_REVERSAL_SHEET_CANDIDATES = [
+    name.strip()
+    for name in os.environ.get(
+        "V_REVERSAL_SHEET_NAMES",
+        "V型反轉掃描,V型反轉,V Reversal",
     ).split(",")
     if name.strip()
 ]
@@ -44,6 +56,8 @@ def parse_num(value) -> float:
 
 
 def get_client():
+    if gspread is None or Credentials is None:
+        raise RuntimeError("請先安裝 gspread 與 google-auth")
     creds_json = os.environ.get("GOOGLE_CREDENTIALS", "")
     if not SHEET_ID:
         raise RuntimeError("GOOGLE_SHEET_ID 環境變數未設定")
@@ -64,7 +78,7 @@ def build_col_map(headers: List[str]) -> Dict[str, int]:
         "price": ["現價", "收盤價", "close", "price"],
         "bb_signal": ["BB訊號", "BB", "訊號"],
         "category": ["命中率", "分類", "category", "結果", "狀態"],
-        "score": ["compositeScore", "totalScore", "score", "分數", "總分", "抗跌分數"],
+        "score": ["compositeScore", "totalScore", "score", "分數", "總分", "抗跌分數", "V分數"],
         "tech_score": ["techScore", "技術分"],
         "chips_score": ["chipsScore", "籌碼分"],
         "vol_score": ["volScore", "量能分"],
@@ -73,6 +87,23 @@ def build_col_map(headers: List[str]) -> Dict[str, int]:
         "badges": ["badges", "標籤", "條件"],
         "chips_detail": ["chipsDetail", "籌碼細節", "法人", "投信", "外資"],
         "block_reason": ["volDetail", "blockReason", "原因", "備註", "note"],
+        "v_state": ["V狀態", "vState", "v_state"],
+        "left_drop_pct": ["左臂跌幅", "leftDropPct", "left_drop_pct"],
+        "rsi14": ["RSI14", "RSI", "rsi14"],
+        "black_count": ["黑K數", "blackCount", "black_count"],
+        "close_location": ["紅K收盤位置", "closeLocation", "close_location"],
+        "upper_wick_ratio": ["上影占比", "upperWickRatio", "upper_wick_ratio"],
+        "volume_ratio": ["量比", "volumeRatio", "volume_ratio"],
+        "relative_strength": ["相對大盤", "relativeStrength", "relative_strength"],
+        "institutional_signal": ["法人訊號", "institutionalSignal", "institutional_signal"],
+        "left_peak": ["左臂高點", "leftPeak", "left_peak"],
+        "v_bottom": ["V底", "vBottom", "v_bottom"],
+        "trigger_mid": ["紅K中值", "triggerMid", "trigger_mid"],
+        "v2_confirm": ["V2確認價", "v2Confirm", "v2_confirm"],
+        "recover_50": ["50%收復價", "recover50", "recover_50"],
+        "recover_618": ["61.8%收復價", "recover618", "recover_618"],
+        "invalid_price": ["失效價", "invalidPrice", "invalid_price"],
+        "trigger_date": ["轉折日", "triggerDate", "trigger_date"],
     }
 
     result = {}
@@ -122,6 +153,13 @@ def get_cell(row: List[str], col: Dict[str, int], key: str, default: str = "") -
 
 def frontend_signal(category: str, badges: str, score: float, mode: str = "main") -> str:
     text = f"{category} {badges}"
+    if mode == "v_reversal":
+        if "VX" in text:
+            return "risk"
+        if "V1" in text or "V2" in text:
+            return "strong"
+        return "watch"
+
     if mode == "contrarian":
         if "紅" in text or "淘汰" in text or score < 40:
             return "risk"
@@ -141,6 +179,8 @@ def build_note(row: List[str], col: Dict[str, int], mode: str, defaults: Optiona
     keys = ["bb_signal", "badges", "chips_detail", "block_reason"]
     if mode == "contrarian":
         keys = ["market_light", "badges", "chips_detail", "block_reason", "bb_signal"]
+    elif mode == "v_reversal":
+        keys = ["v_state", "badges", "institutional_signal", "block_reason"]
 
     parts = []
     for key in keys:
@@ -159,10 +199,10 @@ def row_to_stock(row: List[str], col: Dict[str, int], mode: str, defaults: Optio
         return None
 
     score = parse_num(get_cell(row, col, "score"))
-    category = get_cell(row, col, "category")
+    category = get_cell(row, col, "v_state") if mode == "v_reversal" else get_cell(row, col, "category")
     badges = get_cell(row, col, "badges")
     market_light = get_cell(row, col, "market_light") or defaults.get("大盤燈號", "")
-    return {
+    stock = {
         "code": code,
         "name": get_cell(row, col, "name") or code,
         "signal": frontend_signal(category, badges, score, mode),
@@ -180,6 +220,27 @@ def row_to_stock(row: List[str], col: Dict[str, int], mode: str, defaults: Optio
         "vol_score": parse_num(get_cell(row, col, "vol_score")),
         "relative_score": parse_num(get_cell(row, col, "relative_score")),
     }
+    if mode == "v_reversal":
+        stock.update({
+            "v_state": category,
+            "left_drop_pct": parse_num(get_cell(row, col, "left_drop_pct")),
+            "rsi14": parse_num(get_cell(row, col, "rsi14")),
+            "black_count": int(parse_num(get_cell(row, col, "black_count"))),
+            "close_location": parse_num(get_cell(row, col, "close_location")),
+            "upper_wick_ratio": parse_num(get_cell(row, col, "upper_wick_ratio")),
+            "volume_ratio": parse_num(get_cell(row, col, "volume_ratio")),
+            "relative_strength": parse_num(get_cell(row, col, "relative_strength")),
+            "institutional_signal": get_cell(row, col, "institutional_signal"),
+            "left_peak": parse_num(get_cell(row, col, "left_peak")),
+            "v_bottom": parse_num(get_cell(row, col, "v_bottom")),
+            "trigger_mid": parse_num(get_cell(row, col, "trigger_mid")),
+            "v2_confirm": parse_num(get_cell(row, col, "v2_confirm")),
+            "recover_50": parse_num(get_cell(row, col, "recover_50")),
+            "recover_618": parse_num(get_cell(row, col, "recover_618")),
+            "invalid_price": parse_num(get_cell(row, col, "invalid_price")),
+            "trigger_date": get_cell(row, col, "trigger_date"),
+        })
+    return stock
 
 
 def read_sheet_rows(sh, sheet_name: str, mode: str) -> Tuple[List[Dict], Optional[str]]:
@@ -203,11 +264,13 @@ def read_optional_first_sheet(sh, sheet_names: List[str], mode: str) -> Tuple[Li
     for sheet_name in sheet_names:
         try:
             return read_sheet_rows(sh, sheet_name, mode)
-        except gspread.exceptions.WorksheetNotFound:
-            continue
-        except RuntimeError as exc:
-            print(f"Warning: {exc}")
-            return [], sheet_name
+        except Exception as exc:
+            if gspread is not None and isinstance(exc, gspread.exceptions.WorksheetNotFound):
+                continue
+            if isinstance(exc, RuntimeError):
+                print(f"Warning: {exc}")
+                return [], sheet_name
+            raise
     return [], None
 
 
@@ -218,6 +281,7 @@ def export_data_json():
 
     main_stocks, main_tab = read_sheet_rows(sh, SHEET_SELECTION, "main")
     contrarian_stocks, contrarian_tab = read_optional_first_sheet(sh, CONTRARIAN_SHEET_CANDIDATES, "contrarian")
+    v_reversal_stocks, v_reversal_tab = read_optional_first_sheet(sh, V_REVERSAL_SHEET_CANDIDATES, "v_reversal")
 
     payload = {
         "generated_at": generated_at,
@@ -225,8 +289,10 @@ def export_data_json():
         "sheet_id": SHEET_ID,
         "sheet_tab": main_tab,
         "contrarian_sheet_tab": contrarian_tab,
+        "v_reversal_sheet_tab": v_reversal_tab,
         "stocks": main_stocks,
         "contrarian_stocks": contrarian_stocks,
+        "v_reversal_stocks": v_reversal_stocks,
         "datasets": {
             "main": {
                 "label": "主升段",
@@ -237,6 +303,11 @@ def export_data_json():
                 "label": "逆勢抗跌",
                 "sheet_tab": contrarian_tab,
                 "count": len(contrarian_stocks),
+            },
+            "v_reversal": {
+                "label": "V型反轉",
+                "sheet_tab": v_reversal_tab,
+                "count": len(v_reversal_stocks),
             },
         },
     }
@@ -250,6 +321,10 @@ def export_data_json():
         print(f"Exported {len(contrarian_stocks)} contrarian stocks from {contrarian_tab}")
     else:
         print("No contrarian sheet found; exported empty contrarian_stocks")
+    if v_reversal_tab:
+        print(f"Exported {len(v_reversal_stocks)} V-reversal stocks from {v_reversal_tab}")
+    else:
+        print("No V-reversal sheet found; exported empty v_reversal_stocks")
 
 
 if __name__ == "__main__":

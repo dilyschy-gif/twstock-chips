@@ -36,6 +36,8 @@ import gspread
 import requests
 from google.oauth2.service_account import Credentials
 
+from v_reversal import evaluate_v_reversal
+
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive",
@@ -46,6 +48,7 @@ SHEET_STOCK_DB = "股票資料庫"
 SHEET_CHIPS = "籌碼面資料"
 SHEET_SCAN_RESULT = "掃描結果"
 SHEET_SELECTION = "選股結果"
+SHEET_V_REVERSAL = "V型反轉掃描"
 SHEET_PROGRESS = "掃描進度"
 
 MIN_VOLUME_LOTS = 300
@@ -58,6 +61,13 @@ OUTPUT_HEADERS = [
     "代號", "名稱", "市場", "產業", "現價", "BB訊號", "N字目標", "起漲點", "帶寬",
     "K值", "D值", "量比", "量能訊號", "命中率", "compositeScore", "techScore",
     "chipsScore", "usScore", "volScore", "badges", "chipsDetail", "usDetail", "volDetail"
+]
+
+V_OUTPUT_HEADERS = [
+    "代號", "名稱", "市場", "產業", "現價", "V狀態", "V分數", "左臂跌幅",
+    "RSI14", "黑K數", "紅K收盤位置", "上影占比", "量比", "相對大盤", "法人訊號",
+    "左臂高點", "V底", "紅K中值", "V2確認價", "50%收復價", "61.8%收復價",
+    "失效價", "轉折日", "badges", "chipsDetail", "備註",
 ]
 
 
@@ -243,6 +253,13 @@ def read_chip_streaks(gc) -> Dict[str, Dict]:
         trust_streak = count_positive_streak(entries, "trust")
         foreign_streak = count_positive_streak(entries, "foreign")
         total_streak = count_positive_streak(entries, "total")
+        trust_positive_days_5 = sum(entry.get("trust", 0) > 0 for entry in entries[:5])
+        foreign_positive_days_2 = sum(entry.get("foreign", 0) > 0 for entry in entries[:2])
+        foreign_turn_buy = (
+            len(entries) >= 2
+            and foreign_positive_days_2 == 2
+            and any(entry.get("foreign", 0) < 0 for entry in entries[2:5])
+        )
         latest = entries[0] if entries else {}
         latest_total = latest.get("total", 0)
         if latest_total > 0:
@@ -281,6 +298,9 @@ def read_chip_streaks(gc) -> Dict[str, Dict]:
             "trust_streak": trust_streak,
             "foreign_streak": foreign_streak,
             "total_streak": total_streak,
+            "trust_positive_days_5": trust_positive_days_5,
+            "foreign_positive_days_2": foreign_positive_days_2,
+            "foreign_turn_buy": foreign_turn_buy,
             "chips_score": min(chips_score, 45),
             "chips_detail": (
                 f"{latest.get('date', '')} 三法人合計{latest_total:.0f}張；"
@@ -394,6 +414,28 @@ def fetch_daily_history(code: str, market: str) -> Optional[List[Dict]]:
     except Exception as exc:
         print(f"[WARN] {code} Yahoo 日資料失敗：{exc}")
         return None
+
+
+def fetch_market_change_pct() -> float:
+    """讀取加權指數當日漲跌，避免大盤大漲時把被動反彈誤判為個股轉強。"""
+    url = "https://query1.finance.yahoo.com/v8/finance/chart/%5ETWII"
+    params = {"range": "5d", "interval": "1d"}
+    headers = {"User-Agent": "Mozilla/5.0"}
+    try:
+        response = requests.get(url, params=params, headers=headers, timeout=12)
+        response.raise_for_status()
+        result = (response.json().get("chart", {}).get("result") or [])[0]
+        closes = [
+            float(value)
+            for value in result.get("indicators", {}).get("quote", [{}])[0].get("close", [])
+            if value is not None
+        ]
+        if len(closes) < 2 or not closes[-2]:
+            return 0.0
+        return round((closes[-1] - closes[-2]) / closes[-2] * 100, 2)
+    except Exception as exc:
+        print(f"[WARN] 加權指數資料失敗，V型相對強弱暫以0%計：{exc}")
+        return 0.0
 
 
 def calc_indicators(history: List[Dict]) -> Dict:
@@ -660,10 +702,49 @@ def build_output_row(stock: Dict, indicators: Dict, score: Dict) -> List:
     ]
 
 
-def write_table(sh, title: str, rows: List[List]):
-    ws = worksheet_or_create(sh, title, rows=max(len(rows) + 10, 1000), cols=len(OUTPUT_HEADERS) + 5)
+def build_v_output_row(stock: Dict, result: Dict) -> List:
+    def value(key: str, percent: bool = False):
+        raw = result.get(key)
+        if raw is None:
+            return ""
+        number = raw * 100 if percent else raw
+        return round(number, 2)
+
+    return [
+        stock["code"],
+        stock["name"],
+        stock["market"],
+        stock["industry"],
+        value("close"),
+        result["state"],
+        result["score"],
+        value("left_drop_pct"),
+        value("rsi14"),
+        result["black_count"],
+        value("close_location", percent=True),
+        value("upper_wick_ratio", percent=True),
+        value("volume_ratio"),
+        value("relative_strength"),
+        result["institutional_signal"],
+        value("left_peak"),
+        value("v_bottom"),
+        value("trigger_mid"),
+        value("v2_confirm"),
+        value("recover_50"),
+        value("recover_618"),
+        value("invalid_price"),
+        result["trigger_date"],
+        result["badges"],
+        result["chips_detail"],
+        result["note"],
+    ]
+
+
+def write_table(sh, title: str, rows: List[List], headers: Optional[List[str]] = None):
+    table_headers = headers or OUTPUT_HEADERS
+    ws = worksheet_or_create(sh, title, rows=max(len(rows) + 10, 1000), cols=len(table_headers) + 5)
     ws.clear()
-    values = [OUTPUT_HEADERS] + rows
+    values = [table_headers] + rows
     ws.update(range_name="A1", values=values)
     ws.freeze(rows=1)
 
@@ -700,6 +781,8 @@ def run_main_scan():
     print(f"讀取股票資料庫：{len(stocks)} 檔")
     chips = read_chip_streaks(gc)
     print(f"讀取籌碼資料：{len(chips)} 檔")
+    market_change_pct = fetch_market_change_pct()
+    print(f"加權指數當日漲跌：{market_change_pct:+.2f}%")
     stocks = build_scan_universe(stocks, chips)
     stock_codes = {stock["code"] for stock in stocks}
     matched_chip_codes = stock_codes.intersection(set(chips.keys()))
@@ -714,6 +797,8 @@ def run_main_scan():
 
     formal_rows = []
     observe_rows = []
+    v_rows = []
+    include_failed_v = os.environ.get("V_INCLUDE_FAILED", "0") == "1"
     stats = {
         "processed": 0,
         "no_daily": 0,
@@ -721,6 +806,7 @@ def run_main_scan():
         "no_inst_buy": 0,
         "no_breakout": 0,
         "below_observe": 0,
+        "v_failed": 0,
     }
 
     for idx, stock in enumerate(stocks, 1):
@@ -736,6 +822,14 @@ def run_main_scan():
         indicators = calc_indicators(history)
         chip = chips.get(code, {})
         score = score_stock(stock, indicators, chip)
+        v_result = evaluate_v_reversal(history, chip, market_change_pct)
+        if v_result:
+            if v_result["state"] == "VX":
+                stats["v_failed"] += 1
+                if include_failed_v:
+                    v_rows.append(build_v_output_row(stock, v_result))
+            else:
+                v_rows.append(build_v_output_row(stock, v_result))
 
         if indicators["volume_lots"] < MIN_VOLUME_LOTS:
             stats["low_volume"] += 1
@@ -754,16 +848,22 @@ def run_main_scan():
             stats["below_observe"] += 1
 
         if idx % 50 == 0:
-            print(f"已處理 {idx}/{len(stocks)} 檔；正式 {len(formal_rows)}；觀察 {len(observe_rows)}")
+            print(
+                f"已處理 {idx}/{len(stocks)} 檔；正式 {len(formal_rows)}；"
+                f"觀察 {len(observe_rows)}；V型 {len(v_rows)}"
+            )
             write_progress(sh, "執行中", start_index, len(formal_rows) + len(observe_rows))
 
         time.sleep(REQUEST_SLEEP_SECONDS)
 
     all_rows = formal_rows + observe_rows
     all_rows.sort(key=lambda row: parse_num(row[14]), reverse=True)
+    v_state_order = {"V1": 0, "V0": 1, "V2": 2, "V3": 3, "VX": 4}
+    v_rows.sort(key=lambda row: (v_state_order.get(safe_text(row[5]), 9), -parse_num(row[6])))
 
     # 只寫「選股結果」一個分頁：逆勢抗跌掃描與 data.json 匯出都改讀這一頁
     write_table(sh, SHEET_SELECTION, all_rows)
+    write_table(sh, SHEET_V_REVERSAL, v_rows, V_OUTPUT_HEADERS)
     write_progress(sh, "完成", start_index, len(all_rows))
 
     print("\n淘汰/保留統計：")
@@ -775,7 +875,9 @@ def run_main_scan():
     print(f"分數低於觀察門檻{OBSERVE_THRESHOLD}：{stats['below_observe']}")
     print(f"正式名單：{len(formal_rows)}")
     print(f"觀察名單：{len(observe_rows)}")
+    print(f"V型反轉名單：{len(v_rows)}（失敗型態另計：{stats['v_failed']}）")
     print(f"已寫入「{SHEET_SELECTION}」")
+    print(f"已寫入「{SHEET_V_REVERSAL}」")
 
     return formal_rows, observe_rows
 
