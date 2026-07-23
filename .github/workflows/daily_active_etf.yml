@@ -1,0 +1,40 @@
+name: Daily Active ETF Constituents
+
+on:
+  schedule:
+    # 21:30 Asia/Taipei, Monday-Friday.
+    - cron: "30 13 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-active-etf:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Fetch active ETF constituent changes
+        run: python fetch_active_etf_changes.py
+
+      - name: Commit updated ETF data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add active-etf.json
+          if git diff --staged --quiet; then
+            echo "Active ETF data has not changed."
+          else
+            git commit -m "Update active ETF constituent changes"
+            git pull --rebase
+            git push
+          fi

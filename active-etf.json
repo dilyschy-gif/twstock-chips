@@ -1,0 +1,118 @@
+{
+  "generated_at": "2026-07-23T19:45:28+08:00",
+  "source": {
+    "name": "CMoney 公開ETF持股資料",
+    "url": "https://www.cmoney.tw/MobileService/ashx/GetDtnoData.ashx",
+    "note": "重要變動請以各投信官方每日投資組合公告為準。"
+  },
+  "etfs": [
+    {
+      "code": "00981A",
+      "name": "主動統一台股增長",
+      "official_url": "https://www.ezmoney.com.tw/ETF/Transaction/PCF",
+      "data_date": "20260723",
+      "previous_date": "20260722",
+      "current_holdings_count": 50,
+      "added": [],
+      "removed": []
+    },
+    {
+      "code": "00991A",
+      "name": "主動復華未來50",
+      "official_url": "https://www.fhtrust.com.tw/ETF/trade_list",
+      "data_date": "20260723",
+      "previous_date": "20260722",
+      "current_holdings_count": 50,
+      "added": [],
+      "removed": []
+    },
+    {
+      "code": "00992A",
+      "name": "主動群益科技創新",
+      "official_url": "https://www.capitalfund.com.tw/etf/product/detail/500/portfolio",
+      "data_date": "20260723",
+      "previous_date": "20260722",
+      "current_holdings_count": 36,
+      "added": [],
+      "removed": []
+    },
+    {
+      "code": "00988A",
+      "name": "主動統一全球創新",
+      "official_url": "https://www.ezmoney.com.tw/ETF/Transaction/PCF",
+      "data_date": "20260722",
+      "previous_date": "20260721",
+      "current_holdings_count": 42,
+      "added": [],
+      "removed": []
+    },
+    {
+      "code": "00980A",
+      "name": "主動野村臺灣優選",
+      "official_url": "https://www.nomurafunds.com.tw/ETFWEB/pcf",
+      "data_date": "20260723",
+      "previous_date": "20260722",
+      "current_holdings_count": 50,
+      "added": [],
+      "removed": []
+    }
+  ],
+  "history": [
+    {
+      "batch_date": "20260723",
+      "generated_at": "2026-07-23T19:45:28+08:00",
+      "etfs": [
+        {
+          "code": "00981A",
+          "name": "主動統一台股增長",
+          "official_url": "https://www.ezmoney.com.tw/ETF/Transaction/PCF",
+          "data_date": "20260723",
+          "previous_date": "20260722",
+          "current_holdings_count": 50,
+          "added": [],
+          "removed": []
+        },
+        {
+          "code": "00991A",
+          "name": "主動復華未來50",
+          "official_url": "https://www.fhtrust.com.tw/ETF/trade_list",
+          "data_date": "20260723",
+          "previous_date": "20260722",
+          "current_holdings_count": 50,
+          "added": [],
+          "removed": []
+        },
+        {
+          "code": "00992A",
+          "name": "主動群益科技創新",
+          "official_url": "https://www.capitalfund.com.tw/etf/product/detail/500/portfolio",
+          "data_date": "20260723",
+          "previous_date": "20260722",
+          "current_holdings_count": 36,
+          "added": [],
+          "removed": []
+        },
+        {
+          "code": "00988A",
+          "name": "主動統一全球創新",
+          "official_url": "https://www.ezmoney.com.tw/ETF/Transaction/PCF",
+          "data_date": "20260722",
+          "previous_date": "20260721",
+          "current_holdings_count": 42,
+          "added": [],
+          "removed": []
+        },
+        {
+          "code": "00980A",
+          "name": "主動野村臺灣優選",
+          "official_url": "https://www.nomurafunds.com.tw/ETFWEB/pcf",
+          "data_date": "20260723",
+          "previous_date": "20260722",
+          "current_holdings_count": 50,
+          "added": [],
+          "removed": []
+        }
+      ]
+    }
+  ]
+}

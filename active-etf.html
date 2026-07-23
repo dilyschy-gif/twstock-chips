@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>主動ETF成分變動｜TW Stock Chips</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="active-etf.css">
+</head>
+<body>
+  <main class="app-shell active-etf-shell">
+    <section class="hero-panel active-etf-hero">
+      <div>
+        <a class="back-link" href="index.html">← 返回台股籌碼掃描</a>
+        <p class="eyebrow">Active ETF Watch</p>
+        <h1>主動ETF成分變動</h1>
+        <p class="lead">比較最近兩個公告交易日的完整持股名單，只列出新增及完全剔除的成分股。</p>
+      </div>
+      <div class="status-card" aria-live="polite">
+        <span class="status-dot"></span>
+        <div>
+          <strong id="etfRuntimeStatus">讀取資料中</strong>
+          <small id="etfRuntimeDetail">等待 active-etf.json</small>
+        </div>
+      </div>
+    </section>
+
+    <section class="etf-toolbar" aria-label="主動ETF篩選">
+      <label class="field">
+        <span>更新批次</span>
+        <select id="etfBatchFilter">
+          <option value="">最新資料</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>ETF</span>
+        <select id="etfFilter">
+          <option value="all">全部5檔</option>
+          <option value="00981A">00981A 主動統一台股增長</option>
+          <option value="00991A">00991A 主動復華未來50</option>
+          <option value="00992A">00992A 主動群益科技創新</option>
+          <option value="00988A">00988A 主動統一全球創新</option>
+          <option value="00980A">00980A 主動野村臺灣優選</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>搜尋新增／剔除股票</span>
+        <input id="etfSearch" type="search" placeholder="例如 2330、台積電或 AMD" autocomplete="off">
+      </label>
+      <button id="reloadEtfBtn" type="button" class="secondary">重新讀取</button>
+    </section>
+
+    <section class="summary-grid etf-summary" aria-label="今日變動摘要">
+      <article>
+        <span>追蹤ETF</span>
+        <strong id="trackedEtfCount">0</strong>
+      </article>
+      <article>
+        <span>新增成分股</span>
+        <strong id="totalAdded">0</strong>
+      </article>
+      <article>
+        <span>剔除成分股</span>
+        <strong id="totalRemoved">0</strong>
+      </article>
+      <article>
+        <span>資料產生時間</span>
+        <strong id="etfGeneratedAt" class="summary-time">--</strong>
+      </article>
+    </section>
+
+    <section id="etfCards" class="etf-card-list" aria-live="polite"></section>
+
+    <section class="etf-note panel">
+      <h2>張數顯示規則</h2>
+      <p>台股以1張＝1,000股換算；00988A的海外股票沒有統一的「張」制，因此保留官方揭露股數並標示市場。新增股數採最新日持有數，剔除股數採前一日最後持有數。</p>
+      <p id="etfSourceNote">資料讀取中。重要變動仍應以投信官方每日投資組合公告為準。</p>
+    </section>
+  </main>
+
+  <script src="active-etf.js"></script>
+</body>
+</html>
