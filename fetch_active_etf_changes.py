@@ -6,6 +6,7 @@ from __future__ import annotations
 import concurrent.futures
 import gzip
 import json
+import statistics
 import sys
 import time
 import urllib.parse
@@ -25,9 +26,13 @@ TAIPEI = ZoneInfo("Asia/Taipei")
 FETCH_RANGE = 6
 MAX_SNAPSHOT_DATES = 30
 MAX_HISTORY_BATCHES = 90
-MIN_WEIGHT_CHANGE_PP = 0.10
-STRONG_WEIGHT_CHANGE_PP = 0.30
-STREAK_NOISE_PP = 0.02
+METHODOLOGY_VERSION = 3
+FLOW_CLUSTER_TOLERANCE = 0.015
+FLOW_CLUSTER_MIN_SHARE = 0.55
+MIN_FLOW_SCALE_CHANGE = 0.002
+STRONG_POSITION_CHANGE_PCT = 5.0
+TW_FLOW_ROUNDING_SHARES = 1000
+FOREIGN_FLOW_ROUNDING_SHARES = 1
 
 PRIORITY_CODES = {"00981A", "00991A", "00992A", "00988A", "00980A"}
 
@@ -57,7 +62,9 @@ MARKET_LABELS = {
     "HK": "香港",
     "KS": "韓國",
     "KQ": "韓國",
+    "KP": "韓國",
     "GY": "德國",
+    "GR": "德國",
     "LN": "英國",
     "FP": "法國",
     "NA": "荷蘭",
@@ -309,19 +316,109 @@ def _rank_map(portfolio: dict[str, dict[str, Any]]) -> dict[str, int]:
     return {item["symbol"]: index + 1 for index, item in enumerate(ordered)}
 
 
-def _with_weight_change(
+def _estimate_portfolio_scale(
+    previous: dict[str, dict[str, Any]],
+    current: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    """Estimate proportional portfolio growth caused by ETF creations/redemptions.
+
+    Active trading can move many positions at once, so a plain median is not enough.
+    A scale is accepted only when at least 55% of common holdings form a tight ratio
+    cluster. Otherwise the neutral factor 1.0 is used.
+    """
+    ratios = [
+        current[symbol]["shares"] / previous[symbol]["shares"]
+        for symbol in previous.keys() & current.keys()
+        if previous[symbol].get("shares", 0) > 0
+    ]
+    if len(ratios) < 5:
+        return {
+            "factor": 1.0,
+            "detected": False,
+            "cluster_share": 0.0,
+            "sample_size": len(ratios),
+        }
+
+    best_cluster: list[float] = []
+    for candidate in ratios:
+        cluster = [
+            ratio
+            for ratio in ratios
+            if abs(ratio / candidate - 1) <= FLOW_CLUSTER_TOLERANCE
+        ]
+        if len(cluster) > len(best_cluster):
+            best_cluster = cluster
+        elif len(cluster) == len(best_cluster) and cluster:
+            if abs(statistics.median(cluster) - 1) < abs(
+                statistics.median(best_cluster) - 1
+            ):
+                best_cluster = cluster
+
+    cluster_share = len(best_cluster) / len(ratios)
+    factor = statistics.median(best_cluster) if best_cluster else 1.0
+    detected = (
+        cluster_share >= FLOW_CLUSTER_MIN_SHARE
+        and abs(factor - 1) >= MIN_FLOW_SCALE_CHANGE
+    )
+    return {
+        "factor": round(factor if detected else 1.0, 8),
+        "detected": detected,
+        "cluster_share": round(cluster_share, 4),
+        "sample_size": len(ratios),
+    }
+
+
+def _flow_rounding_shares(market_code: str) -> int:
+    return (
+        TW_FLOW_ROUNDING_SHARES
+        if market_code == "TW"
+        else FOREIGN_FLOW_ROUNDING_SHARES
+    )
+
+
+def _with_position_change(
     holding: dict[str, Any],
-    previous_weight: float,
-    current_weight: float,
+    previous_holding: dict[str, Any] | None,
+    current_holding: dict[str, Any] | None,
+    scale: dict[str, Any] | None = None,
     rank: int | None = None,
     previous_rank: int | None = None,
 ) -> dict[str, Any]:
+    scale = scale or {
+        "factor": 1.0,
+        "detected": False,
+        "cluster_share": 0.0,
+        "sample_size": 0,
+    }
+    factor = float(scale["factor"] or 1)
+    previous_shares = int(previous_holding.get("shares", 0)) if previous_holding else 0
+    current_shares = int(current_holding.get("shares", 0)) if current_holding else 0
+    raw_share_change = current_shares - previous_shares
+    if previous_holding and current_holding:
+        adjusted_share_change = current_shares / factor - previous_shares
+    else:
+        adjusted_share_change = raw_share_change
+    adjusted_share_change = int(round(adjusted_share_change))
+    position_change_pct = (
+        round(adjusted_share_change / previous_shares * 100, 4)
+        if previous_shares
+        else (100.0 if current_shares else -100.0)
+    )
+    previous_weight = previous_holding.get("weight", 0) if previous_holding else 0
+    current_weight = current_holding.get("weight", 0) if current_holding else 0
     item = dict(holding)
     item.update(
         {
+            "previous_shares": previous_shares,
+            "current_shares": current_shares,
+            "raw_share_change": raw_share_change,
+            "adjusted_share_change": adjusted_share_change,
+            "position_change_pct": position_change_pct,
+            "flow_scale": factor,
+            "flow_adjusted": bool(scale["detected"]),
             "previous_weight": round(previous_weight, 4),
             "current_weight": round(current_weight, 4),
-            "delta_pp": round(current_weight - previous_weight, 4),
+            "weight_drift_pp": round(current_weight - previous_weight, 4),
             "rank": rank,
             "previous_rank": previous_rank,
         }
@@ -329,7 +426,56 @@ def _with_weight_change(
     return item
 
 
-def _weight_streak(
+def _is_material_position_change(
+    previous_holding: dict[str, Any],
+    current_holding: dict[str, Any],
+    item: dict[str, Any],
+) -> bool:
+    if not item["flow_adjusted"]:
+        return current_holding["shares"] != previous_holding["shares"]
+    rounding = _flow_rounding_shares(item["market_code"])
+    tolerance = max(
+        rounding,
+        previous_holding["shares"] * FLOW_CLUSTER_TOLERANCE,
+    )
+    return abs(item["adjusted_share_change"]) > tolerance
+
+
+def _position_changes_between(
+    previous: dict[str, dict[str, Any]],
+    current: dict[str, dict[str, Any]],
+    include_entries: bool = False,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    scale = _estimate_portfolio_scale(previous, current)
+    previous_ranks = _rank_map(previous)
+    current_ranks = _rank_map(current)
+    items = []
+    symbols = previous.keys() | current.keys() if include_entries else previous.keys() & current.keys()
+    for symbol in symbols:
+        previous_holding = previous.get(symbol)
+        current_holding = current.get(symbol)
+        holding = current_holding or previous_holding
+        item = _with_position_change(
+            holding,
+            previous_holding,
+            current_holding,
+            scale,
+            current_ranks.get(symbol),
+            previous_ranks.get(symbol),
+        )
+        if previous_holding is None:
+            item["change_type"] = "added"
+        elif current_holding is None:
+            item["change_type"] = "removed"
+        elif _is_material_position_change(previous_holding, current_holding, item):
+            item["change_type"] = "adjusted"
+        else:
+            continue
+        items.append(item)
+    return items, scale
+
+
+def _position_streak(
     portfolios: list[dict[str, dict[str, Any]]],
     symbol: str,
 ) -> int:
@@ -338,12 +484,15 @@ def _weight_streak(
     streak = 0
     direction = 0
     for index in range(len(portfolios) - 1, 0, -1):
-        current = portfolios[index].get(symbol, {}).get("weight", 0)
-        previous = portfolios[index - 1].get(symbol, {}).get("weight", 0)
-        delta = current - previous
-        step = 1 if delta >= STREAK_NOISE_PP else -1 if delta <= -STREAK_NOISE_PP else 0
-        if step == 0:
+        previous = portfolios[index - 1]
+        current = portfolios[index]
+        if symbol not in previous or symbol not in current:
             break
+        changes, _ = _position_changes_between(previous, current)
+        item = next((change for change in changes if change["symbol"] == symbol), None)
+        if not item:
+            break
+        step = 1 if item["adjusted_share_change"] > 0 else -1
         if direction == 0:
             direction = step
         if step != direction:
@@ -359,31 +508,15 @@ def _trend_items(
 ) -> list[dict[str, Any]]:
     if len(dates) < window:
         return []
-    old = portfolios[dates[-window]]
-    current = portfolios[dates[-1]]
-    current_ranks = _rank_map(current)
-    old_ranks = _rank_map(old)
-    items = []
-    for symbol in current.keys() | old.keys():
-        current_item = current.get(symbol)
-        old_item = old.get(symbol)
-        current_weight = current_item.get("weight", 0) if current_item else 0
-        old_weight = old_item.get("weight", 0) if old_item else 0
-        if abs(current_weight - old_weight) + 1e-9 < MIN_WEIGHT_CHANGE_PP:
-            continue
-        holding = current_item or old_item
-        item = _with_weight_change(
-            holding,
-            old_weight,
-            current_weight,
-            current_ranks.get(symbol),
-            old_ranks.get(symbol),
-        )
-        item["change_type"] = (
-            "added" if old_item is None else "removed" if current_item is None else "adjusted"
-        )
-        items.append(item)
-    return sorted(items, key=lambda item: (-abs(item["delta_pp"]), item["symbol"]))
+    items, _ = _position_changes_between(
+        portfolios[dates[-window]],
+        portfolios[dates[-1]],
+        include_entries=True,
+    )
+    return sorted(
+        items,
+        key=lambda item: (-abs(item["position_change_pct"]), item["symbol"]),
+    )
 
 
 def build_report_from_snapshots(
@@ -421,6 +554,9 @@ def build_report_from_snapshots(
             "data_date": "",
             "previous_date": "",
             "current_holdings_count": 0,
+            "flow_scale": 1.0,
+            "flow_adjusted": False,
+            "flow_cluster_share": 0.0,
             "added": [],
             "removed": [],
             "increased": [],
@@ -441,6 +577,9 @@ def build_report_from_snapshots(
             "data_date": data_date,
             "previous_date": "",
             "current_holdings_count": len(current),
+            "flow_scale": 1.0,
+            "flow_adjusted": False,
+            "flow_cluster_share": 0.0,
             "added": [],
             "removed": [],
             "increased": [],
@@ -456,73 +595,68 @@ def build_report_from_snapshots(
     previous_ranks = _rank_map(previous)
     current_ranks = _rank_map(current)
     portfolio_series = [portfolios[date] for date in dates]
+    position_changes, scale = _position_changes_between(previous, current)
 
     added_symbols = sorted(current.keys() - previous.keys())
     removed_symbols = sorted(previous.keys() - current.keys())
     common_symbols = current.keys() & previous.keys()
 
     added = [
-        _with_weight_change(
+        _with_position_change(
             current[symbol],
-            0,
-            current[symbol]["weight"],
+            None,
+            current[symbol],
+            scale,
             current_ranks.get(symbol),
             None,
         )
         for symbol in added_symbols
     ]
     removed = [
-        _with_weight_change(
+        _with_position_change(
             previous[symbol],
-            previous[symbol]["weight"],
-            0,
+            previous[symbol],
+            None,
+            scale,
             None,
             previous_ranks.get(symbol),
         )
         for symbol in removed_symbols
     ]
 
-    weight_changes = []
-    for symbol in common_symbols:
-        delta = current[symbol]["weight"] - previous[symbol]["weight"]
-        if abs(delta) + 1e-9 < MIN_WEIGHT_CHANGE_PP:
-            continue
-        item = _with_weight_change(
-            current[symbol],
-            previous[symbol]["weight"],
-            current[symbol]["weight"],
-            current_ranks.get(symbol),
-            previous_ranks.get(symbol),
-        )
-        item["streak"] = _weight_streak(portfolio_series, symbol)
-        weight_changes.append(item)
-
+    position_changes = [
+        item for item in position_changes if item["symbol"] in common_symbols
+    ]
+    for item in position_changes:
+        item["streak"] = _position_streak(portfolio_series, item["symbol"])
     increased = sorted(
-        (item for item in weight_changes if item["delta_pp"] > 0),
-        key=lambda item: (-item["delta_pp"], item["symbol"]),
+        (item for item in position_changes if item["adjusted_share_change"] > 0),
+        key=lambda item: (-item["position_change_pct"], item["symbol"]),
     )
     decreased = sorted(
-        (item for item in weight_changes if item["delta_pp"] < 0),
-        key=lambda item: (item["delta_pp"], item["symbol"]),
+        (item for item in position_changes if item["adjusted_share_change"] < 0),
+        key=lambda item: (item["position_change_pct"], item["symbol"]),
     )
 
     previous_top10 = {symbol for symbol, rank in previous_ranks.items() if rank <= 10}
     current_top10 = {symbol for symbol, rank in current_ranks.items() if rank <= 10}
     top10_entered = [
-        _with_weight_change(
+        _with_position_change(
             current[symbol],
-            previous.get(symbol, {}).get("weight", 0),
-            current[symbol]["weight"],
+            previous.get(symbol),
+            current[symbol],
+            scale,
             current_ranks.get(symbol),
             previous_ranks.get(symbol),
         )
         for symbol in sorted(current_top10 - previous_top10)
     ]
     top10_exited = [
-        _with_weight_change(
+        _with_position_change(
             (current.get(symbol) or previous[symbol]),
-            previous[symbol]["weight"],
-            current.get(symbol, {}).get("weight", 0),
+            previous[symbol],
+            current.get(symbol),
+            scale,
             current_ranks.get(symbol),
             previous_ranks.get(symbol),
         )
@@ -536,6 +670,9 @@ def build_report_from_snapshots(
         "data_date": data_date,
         "previous_date": previous_date,
         "current_holdings_count": len(current),
+        "flow_scale": scale["factor"],
+        "flow_adjusted": scale["detected"],
+        "flow_cluster_share": scale["cluster_share"],
         "added": added,
         "removed": removed,
         "increased": increased,
@@ -582,31 +719,43 @@ def _score_report_actions(report: dict[str, Any]) -> dict[str, dict[str, Any]]:
                 "market_code": item["market_code"],
                 "score": 0,
                 "labels": [],
-                "delta_pp": 0.0,
+                "position_change_pct": 0.0,
+                "weight_drift_pp": 0.0,
             },
         )
         record["score"] += score
         record["labels"].append(label)
-        record["delta_pp"] = round(record["delta_pp"] + item.get("delta_pp", 0), 4)
+        record["position_change_pct"] = round(
+            record["position_change_pct"] + item.get("position_change_pct", 0),
+            4,
+        )
+        record["weight_drift_pp"] = round(
+            record["weight_drift_pp"] + item.get("weight_drift_pp", 0),
+            4,
+        )
 
     for item in report["added"]:
         add_action(item, 3, "新建倉")
     for item in report["removed"]:
         add_action(item, -3, "完全出清")
     for item in report["increased"]:
-        score = 2 if item["delta_pp"] >= STRONG_WEIGHT_CHANGE_PP else 1
-        add_action(item, score, "明顯加碼" if score == 2 else "小幅加碼")
+        score = (
+            2
+            if item["position_change_pct"] >= STRONG_POSITION_CHANGE_PCT
+            else 1
+        )
+        add_action(item, score, "明顯加碼" if score == 2 else "持股增加")
         if item.get("streak", 0) >= 3:
             add_action(item, 1, "連續加碼")
     for item in report["decreased"]:
-        score = -2 if item["delta_pp"] <= -STRONG_WEIGHT_CHANGE_PP else -1
-        add_action(item, score, "明顯減碼" if score == -2 else "小幅減碼")
+        score = (
+            -2
+            if item["position_change_pct"] <= -STRONG_POSITION_CHANGE_PCT
+            else -1
+        )
+        add_action(item, score, "明顯減碼" if score == -2 else "持股減少")
         if item.get("streak", 0) <= -3:
             add_action(item, -1, "連續減碼")
-    for item in report["top10_entered"]:
-        add_action(item, 1, "進入前十大")
-    for item in report["top10_exited"]:
-        add_action(item, -1, "退出前十大")
     return actions
 
 
@@ -628,7 +777,7 @@ def build_consensus(
                     "market_code": action["market_code"],
                     "manager_scores": {},
                     "funds": [],
-                    "delta_pp_sum": 0.0,
+                    "position_change_pct_sum": 0.0,
                 },
             )
             manager = report["manager"]
@@ -642,11 +791,13 @@ def build_consensus(
                     "manager": manager,
                     "score": action["score"],
                     "labels": action["labels"],
-                    "delta_pp": action["delta_pp"],
+                    "position_change_pct": action["position_change_pct"],
+                    "weight_drift_pp": action["weight_drift_pp"],
                 }
             )
-            record["delta_pp_sum"] = round(
-                record["delta_pp_sum"] + action["delta_pp"],
+            record["position_change_pct_sum"] = round(
+                record["position_change_pct_sum"]
+                + action["position_change_pct"],
                 4,
             )
 
@@ -720,6 +871,9 @@ def _history_report(report: dict[str, Any]) -> dict[str, Any]:
         "data_date",
         "previous_date",
         "current_holdings_count",
+        "flow_scale",
+        "flow_adjusted",
+        "flow_cluster_share",
         "added",
         "removed",
         "increased",
@@ -750,10 +904,26 @@ def _summary(reports: list[dict[str, Any]], batch_date: str) -> dict[str, Any]:
 
 
 def _payload_signature(payload: dict[str, Any]) -> dict[str, Any]:
-    return {
+    signature = {
         key: payload.get(key)
-        for key in ("universe", "batch_date", "summary", "consensus", "etfs", "errors")
+        for key in (
+            "methodology_version",
+            "settings",
+            "universe",
+            "batch_date",
+            "summary",
+            "consensus",
+            "etfs",
+            "errors",
+        )
     }
+    history = payload.get("history")
+    signature["history"] = [
+        {key: value for key, value in item.items() if key != "generated_at"}
+        for item in history
+        if isinstance(item, dict)
+    ] if isinstance(history, list) else []
+    return signature
 
 
 def merge_history(payload: dict[str, Any], existing: dict[str, Any]) -> dict[str, Any]:
@@ -764,6 +934,10 @@ def merge_history(payload: dict[str, Any], existing: dict[str, Any]) -> dict[str
     entry = {
         "batch_date": payload["batch_date"],
         "generated_at": payload["generated_at"],
+        "methodology_version": payload.get(
+            "methodology_version",
+            METHODOLOGY_VERSION,
+        ),
         "summary": payload["summary"],
         "consensus": payload["consensus"],
         "etfs": [_history_report(report) for report in payload["etfs"]],
@@ -777,6 +951,69 @@ def merge_history(payload: dict[str, Any], existing: dict[str, Any]) -> dict[str
     history.sort(key=lambda item: item.get("batch_date", ""))
     merged["history"] = history[-MAX_HISTORY_BATCHES:]
     return merged
+
+
+def _reports_as_of(
+    universe: list[dict[str, Any]],
+    snapshot_funds: dict[str, dict[str, Any]],
+    batch_date: str,
+) -> list[dict[str, Any]]:
+    reports = []
+    for fund in universe:
+        snapshots = [
+            snapshot
+            for snapshot in snapshot_funds.get(fund["code"], {}).get("snapshots", [])
+            if snapshot.get("date", "") <= batch_date
+        ]
+        report = build_report_from_snapshots(fund, snapshots)
+        if (
+            report["status"] == "ok"
+            and report["data_date"]
+            and report["data_date"] < batch_date
+        ):
+            report["status"] = "delayed"
+        reports.append(report)
+    return reports
+
+
+def rebuild_history(
+    existing_history: list[dict[str, Any]],
+    universe: list[dict[str, Any]],
+    snapshot_funds: dict[str, dict[str, Any]],
+    current_batch_date: str,
+    current_generated_at: str,
+) -> list[dict[str, Any]]:
+    existing_by_date = {
+        item["batch_date"]: item
+        for item in existing_history
+        if isinstance(item, dict) and item.get("batch_date")
+    }
+    dates = sorted({*existing_by_date, current_batch_date})[-MAX_HISTORY_BATCHES:]
+    history = []
+    for batch_date in dates:
+        reports = _reports_as_of(universe, snapshot_funds, batch_date)
+        generated_at = (
+            current_generated_at
+            if batch_date == current_batch_date
+            else existing_by_date.get(batch_date, {}).get(
+                "generated_at",
+                current_generated_at,
+            )
+        )
+        history.append(
+            {
+                "batch_date": batch_date,
+                "generated_at": generated_at,
+                "methodology_version": METHODOLOGY_VERSION,
+                "summary": _summary(reports, batch_date),
+                "consensus": {
+                    "domestic": build_consensus(reports, "domestic"),
+                    "foreign": build_consensus(reports, "foreign"),
+                },
+                "etfs": [_history_report(report) for report in reports],
+            }
+        )
+    return history
 
 
 def build_outputs(
@@ -841,16 +1078,22 @@ def build_outputs(
     payload = {
         "generated_at": generated_at,
         "batch_date": batch_date,
+        "methodology_version": METHODOLOGY_VERSION,
         "source": {
             "universe_name": "TWSE主動式ETF商品清單",
             "universe_url": TWSE_ACTIVE_URL,
             "portfolio_name": "CMoney公開ETF持股資料",
             "portfolio_url": CMONEY_ENDPOINT,
-            "note": "重要變動請以各投信及證交所每日投資組合公告為準。",
+            "note": (
+                "加減碼依持股股數並估算排除ETF申購贖回同比例縮放；"
+                "重要變動仍請以各投信及證交所每日投資組合公告為準。"
+            ),
         },
         "settings": {
-            "minimum_weight_change_pp": MIN_WEIGHT_CHANGE_PP,
-            "strong_weight_change_pp": STRONG_WEIGHT_CHANGE_PP,
+            "methodology_version": METHODOLOGY_VERSION,
+            "flow_cluster_tolerance_pct": FLOW_CLUSTER_TOLERANCE * 100,
+            "flow_cluster_min_share_pct": FLOW_CLUSTER_MIN_SHARE * 100,
+            "strong_position_change_pct": STRONG_POSITION_CHANGE_PCT,
             "snapshot_dates": MAX_SNAPSHOT_DATES,
             "history_batches": MAX_HISTORY_BATCHES,
         },
@@ -868,6 +1111,16 @@ def build_outputs(
         "source": payload["source"],
         "funds": snapshot_funds,
     }
+    existing_history = existing_payload.get("history")
+    if not isinstance(existing_history, list):
+        existing_history = []
+    payload["history"] = rebuild_history(
+        existing_history,
+        universe,
+        snapshot_funds,
+        batch_date,
+        generated_at,
+    )
     return payload, snapshot_payload
 
 
@@ -893,7 +1146,8 @@ def write_outputs(
             pass
 
     if payload_changed or payload_needs_compaction:
-        payload = merge_history(payload, existing_payload)
+        if not isinstance(payload.get("history"), list):
+            payload = merge_history(payload, existing_payload)
         output_path.write_text(
             json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n",
             encoding="utf-8",

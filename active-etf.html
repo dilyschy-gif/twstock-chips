@@ -14,7 +14,7 @@
         <a class="back-link" href="index.html">← 返回台股籌碼掃描</a>
         <p class="eyebrow">Active ETF Manager Radar</p>
         <h1>主動ETF經理人操作雷達</h1>
-        <p class="lead">追蹤證交所全部股票型主動ETF，從新建倉、完全出清、權重調整與跨投信共識，觀察專業經理人的市場風向。</p>
+        <p class="lead">追蹤證交所全部股票型主動ETF，從新建倉、完全出清、校正後持股股數變化與跨投信共識，觀察專業經理人的市場風向。</p>
       </div>
       <div class="status-card" aria-live="polite">
         <span class="status-dot"></span>
@@ -44,7 +44,7 @@
       <article>
         <span>加碼／減碼</span>
         <strong><span id="totalIncreased">0</span><i>／</i><span id="totalDecreased">0</span></strong>
-        <small>權重變化至少0.10百分點</small>
+        <small>依持股股數，排除申贖同比例縮放</small>
       </article>
       <article>
         <span>資料批次</span>
@@ -129,14 +129,15 @@
         <h2>訊號判斷</h2>
         <ul>
           <li><strong>新建倉／完全出清：</strong>股票代號進入或離開完整持股名單。</li>
-          <li><strong>明顯加減碼：</strong>單日權重變化至少0.30個百分點；0.10～0.29為小幅調整。</li>
-          <li><strong>3日／5日趨勢：</strong>比較最近第3／第5個公告交易日的權重，不比較原始股數。</li>
-          <li><strong>共識分數：</strong>新建倉+3、完全出清-3、明顯加減碼±2、進出前十大±1、連續3日同向再±1。</li>
+          <li><strong>加碼／減碼：</strong>比較持股股數；若多數共同持股出現同比例增減，先估算排除ETF申購贖回造成的縮放。</li>
+          <li><strong>明顯調整：</strong>校正後部位增減達前期持股5%列為明顯，其餘實際股數變動列為一般調整。</li>
+          <li><strong>3日／5日趨勢：</strong>比較最近第3／第5個公告交易日的校正後持股股數；權重只顯示為漂移參考。</li>
+          <li><strong>共識分數：</strong>新建倉+3、完全出清-3、明顯加減碼±2、一般持股增減±1、連續3日同向再±1；前十大排名變動不計分。</li>
         </ul>
       </article>
       <article class="panel etf-note">
         <h2>股數、張數與資料日</h2>
-        <p>台股以1張＝1,000股換算；海外股票保留揭露股數並標示市場。新增採最新日持有數，剔除採前一日最後持有數。</p>
+        <p>台股以1張＝1,000股換算；海外股票保留揭露股數並標示市場。新增採最新日持有數，剔除採前一日最後持有數。權重會受股價影響，因此不再直接當成經理人買賣。</p>
         <p>海外ETF可能較晚公告，系統在晚間及隔日上午補抓；每檔ETF都使用自己的兩個最新公告日，不會硬套同一日期。</p>
         <p id="etfSourceNote">資料讀取中。重要變動仍應以投信及證交所公告為準。</p>
       </article>

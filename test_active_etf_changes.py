@@ -5,6 +5,7 @@ from fetch_active_etf_changes import (
     build_report,
     build_report_from_snapshots,
     manager_from_name,
+    market_from_symbol,
     merge_history,
     merge_snapshot_fund,
     parse_portfolios,
@@ -27,14 +28,14 @@ def fund(code="00999A", name="主動野村測試", category="domestic"):
 
 
 class ActiveEtfChangesTest(unittest.TestCase):
-    def test_detects_added_removed_and_weight_changes(self):
+    def test_detects_added_removed_and_share_changes(self):
         rows = [
             ["20260722", "2330", "台積電", "10.00", "100000", "股"],
             ["20260722", "2303", "聯電", "2.00", "50000", "股"],
             ["20260722", "2317", "鴻海", "4.00", "60000", "股"],
             ["20260722", "CASH_NTD", "現金", "", "1000000", "元"],
-            ["20260723", "2330", "台積電", "10.45", "110000", "股"],
-            ["20260723", "2317", "鴻海", "3.80", "59000", "股"],
+            ["20260723", "2330", "台積電", "9.50", "110000", "股"],
+            ["20260723", "2317", "鴻海", "4.20", "59000", "股"],
             ["20260723", "2454", "聯發科", "3.00", "25000", "股"],
             ["20260723", "CASH_NTD", "現金", "", "800000", "元"],
         ]
@@ -48,14 +49,18 @@ class ActiveEtfChangesTest(unittest.TestCase):
         self.assertEqual(["2303"], [item["symbol"] for item in report["removed"]])
         self.assertEqual(50, report["removed"][0]["lots"])
         self.assertEqual(["2330"], [item["symbol"] for item in report["increased"]])
-        self.assertAlmostEqual(0.45, report["increased"][0]["delta_pp"])
+        self.assertEqual(10000, report["increased"][0]["adjusted_share_change"])
+        self.assertAlmostEqual(10, report["increased"][0]["position_change_pct"])
+        self.assertAlmostEqual(-0.5, report["increased"][0]["weight_drift_pp"])
         self.assertEqual(["2317"], [item["symbol"] for item in report["decreased"]])
-        self.assertAlmostEqual(-0.2, report["decreased"][0]["delta_pp"])
+        self.assertEqual(-1000, report["decreased"][0]["adjusted_share_change"])
+        self.assertAlmostEqual(-1.6667, report["decreased"][0]["position_change_pct"])
+        self.assertAlmostEqual(0.2, report["decreased"][0]["weight_drift_pp"])
 
-    def test_ignores_weight_noise_below_threshold(self):
+    def test_ignores_weight_change_when_shares_are_unchanged(self):
         rows = [
             ["20260722", "2330", "台積電", "10.00", "100000", "股"],
-            ["20260723", "2330", "台積電", "10.09", "200000", "股"],
+            ["20260723", "2330", "台積電", "12.00", "100000", "股"],
         ]
         report = build_report("00999A", "主動野村測試", "https://example.com", TITLE, rows)
         self.assertEqual([], report["increased"])
@@ -75,6 +80,10 @@ class ActiveEtfChangesTest(unittest.TestCase):
         self.assertEqual(205000, added["shares"])
         self.assertIsNone(added["lots"])
 
+    def test_korea_and_germany_market_suffixes(self):
+        self.assertEqual(("KP", "韓國"), market_from_symbol("000660 KP"))
+        self.assertEqual(("GR", "德國"), market_from_symbol("IFX GR"))
+
     def test_one_date_creates_baseline_instead_of_blocking_all_funds(self):
         rows = [["20260723", "2330", "台積電", "10", "100000", "股"]]
         report = build_report("00999A", "主動野村測試", "https://example.com", TITLE, rows)
@@ -82,9 +91,15 @@ class ActiveEtfChangesTest(unittest.TestCase):
         self.assertEqual([], report["added"])
         self.assertEqual([], report["removed"])
 
-    def test_three_and_five_day_trends_use_weight_not_shares(self):
+    def test_three_and_five_day_trends_use_shares_not_weight(self):
         snapshots = []
-        for index, weight in enumerate([1.0, 1.1, 1.3, 1.5, 1.8], start=1):
+        for index, (shares, weight) in enumerate(
+            zip(
+                [100000, 110000, 120000, 130000, 140000],
+                [5.0, 4.8, 4.6, 4.4, 4.2],
+            ),
+            start=1,
+        ):
             snapshots.append(
                 {
                     "date": f"202607{index:02d}",
@@ -94,8 +109,8 @@ class ActiveEtfChangesTest(unittest.TestCase):
                             "name": "台積電",
                             "market_code": "TW",
                             "market": "台灣",
-                            "shares": 100000 * index,
-                            "lots": 100 * index,
+                            "shares": shares,
+                            "lots": shares / 1000,
                             "weight": weight,
                             "unit": "股",
                         }
@@ -103,9 +118,42 @@ class ActiveEtfChangesTest(unittest.TestCase):
                 }
             )
         report = build_report_from_snapshots(fund(), snapshots)
-        self.assertAlmostEqual(0.5, report["trend_3d"][0]["delta_pp"])
-        self.assertAlmostEqual(0.8, report["trend_5d"][0]["delta_pp"])
+        self.assertAlmostEqual(
+            16.6667,
+            report["trend_3d"][0]["position_change_pct"],
+        )
+        self.assertAlmostEqual(40, report["trend_5d"][0]["position_change_pct"])
         self.assertGreaterEqual(report["increased"][0]["streak"], 3)
+
+    def test_proportional_etf_growth_is_removed_before_action_detection(self):
+        rows = []
+        for index in range(6):
+            symbol = str(2300 + index)
+            rows.append(
+                ["20260722", symbol, f"股票{index}", "2", "100000", "股"]
+            )
+            current_shares = 120000 if index == 5 else 110000
+            rows.append(
+                [
+                    "20260723",
+                    symbol,
+                    f"股票{index}",
+                    "2",
+                    str(current_shares),
+                    "股",
+                ]
+            )
+        report = build_report(
+            "00999A",
+            "主動野村測試",
+            "https://example.com",
+            TITLE,
+            rows,
+        )
+        self.assertTrue(report["flow_adjusted"])
+        self.assertAlmostEqual(1.1, report["flow_scale"])
+        self.assertEqual(["2305"], [item["symbol"] for item in report["increased"]])
+        self.assertEqual([], report["decreased"])
 
     def test_consensus_caps_duplicate_funds_from_same_manager(self):
         base_item = {
@@ -116,9 +164,16 @@ class ActiveEtfChangesTest(unittest.TestCase):
             "shares": 100000,
             "lots": 100,
             "weight": 4,
+            "previous_shares": 100000,
+            "current_shares": 110000,
+            "raw_share_change": 10000,
+            "adjusted_share_change": 10000,
+            "position_change_pct": 10,
+            "flow_scale": 1,
+            "flow_adjusted": False,
             "previous_weight": 3.5,
             "current_weight": 4,
-            "delta_pp": 0.5,
+            "weight_drift_pp": 0.5,
             "rank": 1,
             "previous_rank": 2,
             "streak": 1,

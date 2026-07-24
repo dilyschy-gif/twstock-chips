@@ -465,6 +465,14 @@
   min-width: 620px;
 }
 
+.weight-table {
+  min-width: 920px;
+}
+
+.trend-table {
+  min-width: 760px;
+}
+
 .etf-change-table th,
 .etf-change-table td {
   padding: 10px;

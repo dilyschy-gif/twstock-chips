@@ -74,12 +74,32 @@ function formatDelta(value) {
   return (number > 0 ? "+" : "") + number.toFixed(2) + "pp";
 }
 
+function formatPositionChangePct(value) {
+  const number = Number(value || 0);
+  return (number > 0 ? "+" : "") + number.toFixed(2) + "%";
+}
+
+function formatScale(value) {
+  return formatPositionChangePct((Number(value || 1) - 1) * 100);
+}
+
 function positionText(item) {
   const shares = formatNumber(item.shares) + "股";
   if (item.market_code === "TW" && item.lots !== null && item.lots !== undefined) {
     return shares + "／" + formatNumber(item.lots) + "張";
   }
   return shares;
+}
+
+function shareChangeText(item) {
+  const shares = Number(item.adjusted_share_change || 0);
+  const sign = shares > 0 ? "+" : "";
+  let text = sign + formatNumber(shares) + "股";
+  if (item.market_code === "TW") {
+    const lots = shares / 1000;
+    text += "／" + (lots > 0 ? "+" : "") + formatNumber(lots) + "張";
+  }
+  return (item.flow_adjusted ? "估算 " : "") + text;
 }
 
 function normalizeEtf(etf) {
@@ -149,7 +169,7 @@ function renderPositionTable(items, type, keyword) {
     "</div>";
 }
 
-function renderWeightTable(items, direction, keyword) {
+function renderPositionChangeTable(items, direction, keyword) {
   const filtered = items.filter((item) => matchesSearch(item, keyword));
   const label = direction === "up" ? "加碼" : "減碼";
   if (!filtered.length) {
@@ -158,20 +178,26 @@ function renderWeightTable(items, direction, keyword) {
   }
   const shown = filtered.slice(0, 10);
   return '<div class="table-wrap etf-table-wrap"><table class="etf-change-table weight-table">' +
-    "<thead><tr><th>市場／代號</th><th>名稱</th><th>權重變化</th><th>趨勢</th></tr></thead>" +
+    "<thead><tr><th>市場／代號</th><th>名稱</th><th>持股股數</th><th>校正後變動</th><th>權重漂移</th><th>趨勢</th></tr></thead>" +
     "<tbody>" +
     shown.map((item) => {
       const streak = Number(item.streak || 0);
       const streakText = Math.abs(streak) >= 3
         ? "連續" + Math.abs(streak) + "日" + (streak > 0 ? "加碼" : "減碼")
-        : Math.abs(Number(item.delta_pp)) >= 0.3 ? "明顯調整" : "小幅調整";
+        : Math.abs(Number(item.position_change_pct)) >= 5 ? "明顯調整" : "持股調整";
       return "<tr>" +
         "<td>" + marketSymbolCell(item) + "</td>" +
         "<td>" + etfEscapeHtml(item.name) + "</td>" +
-        '<td class="weight-shift ' + (Number(item.delta_pp) > 0 ? "positive" : "negative") + '">' +
+        "<td>" + etfEscapeHtml(formatNumber(item.previous_shares)) + " → " +
+          etfEscapeHtml(formatNumber(item.current_shares)) + "股</td>" +
+        '<td class="weight-shift ' + (Number(item.adjusted_share_change) > 0 ? "positive" : "negative") + '">' +
+          etfEscapeHtml(shareChangeText(item)) +
+          "<small>" + etfEscapeHtml(formatPositionChangePct(item.position_change_pct)) + "</small>" +
+        "</td>" +
+        '<td class="weight-shift ' + (Number(item.weight_drift_pp) > 0 ? "positive" : "negative") + '">' +
           etfEscapeHtml(formatWeight(item.previous_weight)) + " → " +
           etfEscapeHtml(formatWeight(item.current_weight)) +
-          "<small>" + etfEscapeHtml(formatDelta(item.delta_pp)) + "</small>" +
+          "<small>" + etfEscapeHtml(formatDelta(item.weight_drift_pp)) + "</small>" +
         "</td>" +
         "<td>" + etfEscapeHtml(streakText) + "</td>" +
       "</tr>";
@@ -190,16 +216,20 @@ function renderTrendTable(items, label, keyword) {
   }
   const shown = filtered.slice(0, 8);
   return '<div class="table-wrap etf-table-wrap"><table class="etf-change-table trend-table">' +
-    "<thead><tr><th>市場／代號</th><th>名稱</th><th>" + etfEscapeHtml(label) + "權重變化</th></tr></thead>" +
+    "<thead><tr><th>市場／代號</th><th>名稱</th><th>" + etfEscapeHtml(label) + "校正後持股變化</th><th>權重漂移</th></tr></thead>" +
     "<tbody>" +
     shown.map((item) =>
       "<tr>" +
         "<td>" + marketSymbolCell(item) + "</td>" +
         "<td>" + etfEscapeHtml(item.name) + "</td>" +
-        '<td class="weight-shift ' + (Number(item.delta_pp) > 0 ? "positive" : "negative") + '">' +
+        '<td class="weight-shift ' + (Number(item.adjusted_share_change) > 0 ? "positive" : "negative") + '">' +
+          etfEscapeHtml(shareChangeText(item)) +
+          "<small>" + etfEscapeHtml(formatPositionChangePct(item.position_change_pct)) + "</small>" +
+        "</td>" +
+        '<td class="weight-shift ' + (Number(item.weight_drift_pp) > 0 ? "positive" : "negative") + '">' +
           etfEscapeHtml(formatWeight(item.previous_weight)) + " → " +
           etfEscapeHtml(formatWeight(item.current_weight)) +
-          "<small>" + etfEscapeHtml(formatDelta(item.delta_pp)) + "</small>" +
+          "<small>" + etfEscapeHtml(formatDelta(item.weight_drift_pp)) + "</small>" +
         "</td>" +
       "</tr>"
     ).join("") +
@@ -219,7 +249,7 @@ function statusMeta(etf, batchDate) {
   }
   const hasChanges = etf.added.length + etf.removed.length +
     etf.increased.length + etf.decreased.length > 0;
-  return [hasChanges ? "經理人有操作" : "本次無顯著變動", hasChanges ? "changed" : "unchanged"];
+  return [hasChanges ? "有持股操作訊號" : "本次無持股變動", hasChanges ? "changed" : "unchanged"];
 }
 
 function renderTop10Changes(etf) {
@@ -259,6 +289,11 @@ function renderEtfCard(rawEtf, keyword, batchDate) {
     (etf.fetch_error
       ? '<p class="etf-warning">本次抓取異常，畫面沿用最近成功快照。</p>'
       : "") +
+    (etf.flow_adjusted
+      ? '<p class="etf-warning">本期偵測到ETF申贖造成的共同持股縮放 ' +
+        etfEscapeHtml(formatScale(etf.flow_scale)) +
+        "，下列加減碼已先排除同比例變動後再估算。</p>"
+      : "") +
     renderTop10Changes(etf) +
     '<div class="etf-change-grid">' +
       '<section class="etf-change-block added-block">' +
@@ -271,16 +306,16 @@ function renderEtfCard(rawEtf, keyword, batchDate) {
       "</section>" +
     "</div>" +
     '<details class="etf-detail-section"' + openAttribute + ">" +
-      "<summary><span>權重調整</span><strong>加碼" + etf.increased.length +
+      "<summary><span>校正後持股股數調整</span><strong>加碼" + etf.increased.length +
         "／減碼" + etf.decreased.length + "</strong></summary>" +
       '<div class="etf-change-grid">' +
         '<section class="etf-change-block increased-block">' +
-          '<div class="etf-change-title"><h3>權重增加</h3><strong>' + etf.increased.length + "</strong></div>" +
-          renderWeightTable(etf.increased, "up", keyword) +
+          '<div class="etf-change-title"><h3>持股增加</h3><strong>' + etf.increased.length + "</strong></div>" +
+          renderPositionChangeTable(etf.increased, "up", keyword) +
         "</section>" +
         '<section class="etf-change-block decreased-block">' +
-          '<div class="etf-change-title"><h3>權重下降</h3><strong>' + etf.decreased.length + "</strong></div>" +
-          renderWeightTable(etf.decreased, "down", keyword) +
+          '<div class="etf-change-title"><h3>持股減少</h3><strong>' + etf.decreased.length + "</strong></div>" +
+          renderPositionChangeTable(etf.decreased, "down", keyword) +
         "</section>" +
       "</div>" +
     "</details>" +
@@ -288,11 +323,11 @@ function renderEtfCard(rawEtf, keyword, batchDate) {
       "<summary><span>中短期趨勢</span><strong>3日／5日</strong></summary>" +
       '<div class="etf-change-grid">' +
         '<section class="etf-change-block trend-block">' +
-          '<div class="etf-change-title"><h3>3日權重趨勢</h3><strong>' + etf.trend_3d.length + "</strong></div>" +
+          '<div class="etf-change-title"><h3>3日持股趨勢</h3><strong>' + etf.trend_3d.length + "</strong></div>" +
           renderTrendTable(etf.trend_3d, "3日", keyword) +
         "</section>" +
         '<section class="etf-change-block trend-block">' +
-          '<div class="etf-change-title"><h3>5日權重趨勢</h3><strong>' + etf.trend_5d.length + "</strong></div>" +
+          '<div class="etf-change-title"><h3>5日持股趨勢</h3><strong>' + etf.trend_5d.length + "</strong></div>" +
           renderTrendTable(etf.trend_5d, "5日", keyword) +
         "</section>" +
       "</div>" +
@@ -365,15 +400,20 @@ function renderConsensusItem(item, direction) {
     "</summary>" +
     '<div class="consensus-detail">' +
       "<p><strong>" + etfEscapeHtml(managerCount) + "家投信</strong>、" +
-        etfEscapeHtml(item.etf_count) + "檔ETF採取同向操作；權重變化合計 " +
-        etfEscapeHtml(formatDelta(item.delta_pp_sum)) + "。</p>" +
+        etfEscapeHtml(item.etf_count) +
+        "檔ETF採取同向操作；分數只採計新建倉、完全出清與校正後持股股數變化。</p>" +
       "<p>投信：" + etfEscapeHtml(managers || "--") + "</p>" +
       '<div class="consensus-funds">' +
-        funds.slice(0, 8).map((fund) =>
-          "<span><strong>" + etfEscapeHtml(fund.code) + "</strong> " +
-          etfEscapeHtml(asArray(fund.labels).join("、")) + " " +
-          etfEscapeHtml(formatDelta(fund.delta_pp)) + "</span>"
-        ).join("") +
+        funds.slice(0, 8).map((fund) => {
+          const labels = asArray(fund.labels);
+          const isEntryExit = labels.includes("新建倉") || labels.includes("完全出清");
+          const changeText = isEntryExit
+            ? ""
+            : " " + formatPositionChangePct(fund.position_change_pct);
+          return "<span><strong>" + etfEscapeHtml(fund.code) + "</strong> " +
+            etfEscapeHtml(labels.join("、")) +
+            etfEscapeHtml(changeText) + "</span>";
+        }).join("") +
       "</div>" +
     "</div>" +
   "</details>";
