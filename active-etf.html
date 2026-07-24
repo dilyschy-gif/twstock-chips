@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>主動ETF成分變動｜TW Stock Chips</title>
+  <title>主動ETF經理人操作雷達｜TW Stock Chips</title>
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="active-etf.css">
 </head>
@@ -12,16 +12,77 @@
     <section class="hero-panel active-etf-hero">
       <div>
         <a class="back-link" href="index.html">← 返回台股籌碼掃描</a>
-        <p class="eyebrow">Active ETF Watch</p>
-        <h1>主動ETF成分變動</h1>
-        <p class="lead">比較最近兩個公告交易日的完整持股名單，只列出新增及完全剔除的成分股。</p>
+        <p class="eyebrow">Active ETF Manager Radar</p>
+        <h1>主動ETF經理人操作雷達</h1>
+        <p class="lead">追蹤證交所全部股票型主動ETF，從新建倉、完全出清、權重調整與跨投信共識，觀察專業經理人的市場風向。</p>
       </div>
       <div class="status-card" aria-live="polite">
         <span class="status-dot"></span>
         <div>
           <strong id="etfRuntimeStatus">讀取資料中</strong>
-          <small id="etfRuntimeDetail">等待 active-etf.json</small>
+          <small id="etfRuntimeDetail">等待經理人雷達資料</small>
         </div>
+      </div>
+    </section>
+
+    <section class="summary-grid etf-summary" aria-label="主動ETF市場摘要">
+      <article>
+        <span>股票型主動ETF</span>
+        <strong id="trackedEtfCount">0</strong>
+        <small id="etfMix">--</small>
+      </article>
+      <article>
+        <span>最新／待補資料</span>
+        <strong><span id="updatedEtfCount">0</span><i>／</i><span id="delayedEtfCount">0</span></strong>
+        <small>各ETF依自己的公告日</small>
+      </article>
+      <article>
+        <span>新增／剔除</span>
+        <strong><span id="totalAdded">0</span><i>／</i><span id="totalRemoved">0</span></strong>
+        <small>完整進出持股名單</small>
+      </article>
+      <article>
+        <span>加碼／減碼</span>
+        <strong><span id="totalIncreased">0</span><i>／</i><span id="totalDecreased">0</span></strong>
+        <small>權重變化至少0.10百分點</small>
+      </article>
+      <article>
+        <span>資料批次</span>
+        <strong id="etfBatchDate" class="summary-time">--</strong>
+        <small id="etfGeneratedAt">--</small>
+      </article>
+    </section>
+
+    <section class="panel consensus-panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Manager Consensus</p>
+          <h2>跨投信經理人共識</h2>
+          <p>同一股票由越多家不同投信採取相同方向，訊號越值得優先研究；這是風向雷達，不等於買賣建議。</p>
+        </div>
+        <label class="field compact-field">
+          <span>市場</span>
+          <select id="consensusRegionFilter">
+            <option value="domestic">台股型ETF</option>
+            <option value="foreign">海外型ETF</option>
+          </select>
+        </label>
+      </div>
+      <div class="consensus-grid">
+        <section class="consensus-column bullish-column">
+          <div class="consensus-title">
+            <h3>共識加碼排行</h3>
+            <span>不同投信優先</span>
+          </div>
+          <div id="bullishConsensus" class="consensus-list"></div>
+        </section>
+        <section class="consensus-column bearish-column">
+          <div class="consensus-title">
+            <h3>共識減碼排行</h3>
+            <span>不同投信優先</span>
+          </div>
+          <div id="bearishConsensus" class="consensus-list"></div>
+        </section>
       </div>
     </section>
 
@@ -33,48 +94,52 @@
         </select>
       </label>
       <label class="field">
-        <span>ETF</span>
-        <select id="etfFilter">
-          <option value="all">全部5檔</option>
-          <option value="00981A">00981A 主動統一台股增長</option>
-          <option value="00991A">00991A 主動復華未來50</option>
-          <option value="00992A">00992A 主動群益科技創新</option>
-          <option value="00988A">00988A 主動統一全球創新</option>
-          <option value="00980A">00980A 主動野村臺灣優選</option>
+        <span>ETF範圍</span>
+        <select id="etfGroupFilter">
+          <option value="priority">我的重點5檔</option>
+          <option value="all">全部股票型ETF</option>
+          <option value="domestic">台股型ETF</option>
+          <option value="foreign">海外型ETF</option>
         </select>
       </label>
       <label class="field">
-        <span>搜尋新增／剔除股票</span>
+        <span>指定ETF</span>
+        <select id="etfFilter">
+          <option value="all">全部</option>
+        </select>
+      </label>
+      <label class="field search-field">
+        <span>搜尋股票</span>
         <input id="etfSearch" type="search" placeholder="例如 2330、台積電或 AMD" autocomplete="off">
       </label>
       <button id="reloadEtfBtn" type="button" class="secondary">重新讀取</button>
     </section>
 
-    <section class="summary-grid etf-summary" aria-label="今日變動摘要">
-      <article>
-        <span>追蹤ETF</span>
-        <strong id="trackedEtfCount">0</strong>
-      </article>
-      <article>
-        <span>新增成分股</span>
-        <strong id="totalAdded">0</strong>
-      </article>
-      <article>
-        <span>剔除成分股</span>
-        <strong id="totalRemoved">0</strong>
-      </article>
-      <article>
-        <span>資料產生時間</span>
-        <strong id="etfGeneratedAt" class="summary-time">--</strong>
-      </article>
+    <section class="section-heading radar-heading">
+      <div>
+        <p class="eyebrow">ETF Detail</p>
+        <h2>單一ETF操作明細</h2>
+      </div>
+      <span id="visibleEtfCount" class="result-count">顯示0檔</span>
     </section>
-
     <section id="etfCards" class="etf-card-list" aria-live="polite"></section>
 
-    <section class="etf-note panel">
-      <h2>張數顯示規則</h2>
-      <p>台股以1張＝1,000股換算；00988A的海外股票沒有統一的「張」制，因此保留官方揭露股數並標示市場。新增股數採最新日持有數，剔除股數採前一日最後持有數。</p>
-      <p id="etfSourceNote">資料讀取中。重要變動仍應以投信官方每日投資組合公告為準。</p>
+    <section class="etf-method-grid">
+      <article class="panel etf-note">
+        <h2>訊號判斷</h2>
+        <ul>
+          <li><strong>新建倉／完全出清：</strong>股票代號進入或離開完整持股名單。</li>
+          <li><strong>明顯加減碼：</strong>單日權重變化至少0.30個百分點；0.10～0.29為小幅調整。</li>
+          <li><strong>3日／5日趨勢：</strong>比較最近第3／第5個公告交易日的權重，不比較原始股數。</li>
+          <li><strong>共識分數：</strong>新建倉+3、完全出清-3、明顯加減碼±2、進出前十大±1、連續3日同向再±1。</li>
+        </ul>
+      </article>
+      <article class="panel etf-note">
+        <h2>股數、張數與資料日</h2>
+        <p>台股以1張＝1,000股換算；海外股票保留揭露股數並標示市場。新增採最新日持有數，剔除採前一日最後持有數。</p>
+        <p>海外ETF可能較晚公告，系統在晚間及隔日上午補抓；每檔ETF都使用自己的兩個最新公告日，不會硬套同一日期。</p>
+        <p id="etfSourceNote">資料讀取中。重要變動仍應以投信及證交所公告為準。</p>
+      </article>
     </section>
   </main>
 

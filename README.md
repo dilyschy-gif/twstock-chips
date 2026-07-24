@@ -29,6 +29,22 @@ mopsfin 月營收 CSV → monthly_revenue_fetch.py → 「月營收」分頁    
            → BB-8 morningReport/eveningReport（Telegram 推播）
 ```
 
+### 主動ETF經理人操作雷達
+
+`fetch_active_etf_changes.py` 每日從 TWSE 主動式ETF商品清單自動取得全部股票型（代號 A）
+商品，再抓取最近 6 個公告交易日的完整股票持股。資料分成兩個檔案：
+
+- `active-etf-snapshots.json.gz`：每檔ETF最近30個交易日的完整持股、股數及權重壓縮快照。
+- `active-etf.json`：前端使用的新增／剔除、權重加減碼、3日／5日趨勢、前十大進出及
+  跨投信共識分數，保留最近90個更新批次。
+
+成分進出以股票代號集合判斷；既有成分股不比較原始股數，而比較權重，避免ETF申購贖回
+造成整體股數同比例變動時產生假訊號。權重變化至少0.10個百分點才顯示，0.30以上視為
+明顯調整。同一家投信旗下多檔ETF的共識分數會設上限，避免重複放大。
+
+排程為台灣時間週一至週五21:30，以及週二至週六08:00補抓較晚公告的海外型ETF。
+單一ETF抓取失敗時沿用最近成功快照並標示異常，不阻斷其他ETF更新。
+
 兩份試算表：
 - BB-8 表 `16SNd2Tsi...`：config / signals / tg_log 等
 - StockRadar 表 `1lxp1HcYf...`：選股結果 / 籌碼面資料 / 月營收 / 股票資料庫 等
