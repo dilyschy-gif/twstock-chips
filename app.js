@@ -507,13 +507,32 @@ function drawChart() {
       { y: yFor(levels.target), color: chartColors.target, label: "N目標 " + formatPrice(levels.target) }
     );
   }
-  const candleObstacles = candles.map((candle, index) => ({
+  const chartObstacles = candles.map((candle, index) => ({
     left: xFor(index) - candleW / 2 - 3,
     right: xFor(index) + candleW / 2 + 3,
     top: yFor(candle.high) - 3,
     bottom: yFor(candle.low) + 3
   }));
-  drawLevels(ctx, padding, plotW, plotH, levelLabels, candleObstacles);
+  if (levels.type !== "v_reversal") {
+    [
+      [levels.pointAIndex, candles[levels.pointAIndex]?.low],
+      [levels.pointBIndex, candles[levels.pointBIndex]?.high],
+      [levels.pointCIndex, candles[levels.pointCIndex]?.low]
+    ].forEach(([index, value]) => {
+      if (!Number.isInteger(index) || !Number.isFinite(value)) return;
+      const x = xFor(index);
+      const y = yFor(value);
+      chartObstacles.push({ left: x - 7, right: x + 22, top: y - 21, bottom: y + 7 });
+    });
+  }
+  const arrangedLevelLabels = prepareLevels(
+    ctx,
+    padding,
+    plotW,
+    plotH,
+    levelLabels,
+    chartObstacles
+  );
 
   candles.forEach((candle, index) => {
     const x = xFor(index);
@@ -542,6 +561,9 @@ function drawChart() {
   drawXAxis(ctx, candles, xFor, padding, height);
   drawLegend(ctx, padding, height, levels.type);
   if (chartState.hoverIndex !== null) drawHoverGuide(ctx, candles, chartState.hoverIndex, xFor, yFor, padding, plotH);
+  // Labels belong on the top layer. Drawing them last prevents candles,
+  // moving averages and swing-point markers from covering their values.
+  drawPreparedLevelLabels(ctx, padding, plotW, arrangedLevelLabels);
 }
 
 function drawGrid(ctx, padding, width, plotW, plotH, yMin, yMax, yFor) {
@@ -619,22 +641,34 @@ function findClearLabelX(labelY, textWidth, obstacles, plotLeft, plotRight) {
   return bestX;
 }
 
-function drawLevels(ctx, padding, plotW, plotH, items, candleObstacles = []) {
+function prepareLevels(ctx, padding, plotW, plotH, items, chartObstacles = []) {
   const arranged = layoutLevelLabels(items, padding.top + 10, padding.top + plotH - 8);
   arranged.forEach((item) => drawLevel(ctx, padding, plotW, item.y, item.color));
 
   ctx.save();
   ctx.font = "12px Arial";
-  arranged.forEach((item) => {
+  const prepared = arranged.map((item) => {
     const textWidth = ctx.measureText(item.label).width;
     const labelX = findClearLabelX(
       item.labelY,
       textWidth,
-      candleObstacles,
+      chartObstacles,
       padding.left,
       padding.left + plotW
     );
+    return { ...item, textWidth, labelX };
+  });
+  ctx.restore();
+  return prepared;
+}
+
+function drawPreparedLevelLabels(ctx, padding, plotW, arranged) {
+  ctx.save();
+  ctx.font = "12px Arial";
+  arranged.forEach((item) => {
     const textY = item.labelY - 5;
+    const labelX = item.labelX;
+    const textWidth = item.textWidth;
     if (Math.abs(item.labelY - item.y) > 2 || labelX < padding.left + plotW - textWidth - 18) {
       ctx.strokeStyle = item.color;
       ctx.lineWidth = 1;
