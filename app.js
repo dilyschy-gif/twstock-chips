@@ -490,18 +490,24 @@ function drawChart() {
   drawGrid(ctx, padding, width, plotW, plotH, yMin, yMax, yFor);
   drawZone(ctx, padding, plotW, yFor(levels.target), yFor(levels.neckline), "rgba(180, 83, 9, 0.10)");
   drawZone(ctx, padding, plotW, yFor(levels.neckline), yFor(levels.support), "rgba(15, 118, 110, 0.10)");
+  const levelLabels = [];
   if (levels.type === "v_reversal") {
-    drawLevel(ctx, padding, plotW, yFor(levels.neckline), chartColors.neckline, "V2確認 " + formatPrice(levels.neckline));
+    levelLabels.push({ y: yFor(levels.neckline), color: chartColors.neckline, label: "V2確認 " + formatPrice(levels.neckline) });
     if (levels.hasTriggerMid) {
-      drawLevel(ctx, padding, plotW, yFor(levels.entryLow), chartColors.ma5, "紅K中值 " + formatPrice(levels.entryLow));
+      levelLabels.push({ y: yFor(levels.entryLow), color: chartColors.ma5, label: "紅K中值 " + formatPrice(levels.entryLow) });
     }
-    drawLevel(ctx, padding, plotW, yFor(levels.support), chartColors.support, "V底 " + formatPrice(levels.support));
-    drawLevel(ctx, padding, plotW, yFor(levels.target), chartColors.target, "50%收復 " + formatPrice(levels.target));
+    levelLabels.push(
+      { y: yFor(levels.support), color: chartColors.support, label: "V底 " + formatPrice(levels.support) },
+      { y: yFor(levels.target), color: chartColors.target, label: "50%收復 " + formatPrice(levels.target) }
+    );
   } else {
-    drawLevel(ctx, padding, plotW, yFor(levels.neckline), chartColors.neckline, "頸線 " + formatPrice(levels.neckline));
-    drawLevel(ctx, padding, plotW, yFor(levels.support), chartColors.support, "支撐 " + formatPrice(levels.support));
-    drawLevel(ctx, padding, plotW, yFor(levels.target), chartColors.target, "N目標 " + formatPrice(levels.target));
+    levelLabels.push(
+      { y: yFor(levels.neckline), color: chartColors.neckline, label: "頸線 " + formatPrice(levels.neckline) },
+      { y: yFor(levels.support), color: chartColors.support, label: "支撐 " + formatPrice(levels.support) },
+      { y: yFor(levels.target), color: chartColors.target, label: "N目標 " + formatPrice(levels.target) }
+    );
   }
+  drawLevels(ctx, padding, plotW, plotH, levelLabels);
 
   candles.forEach((candle, index) => {
     const x = xFor(index);
@@ -555,19 +561,60 @@ function drawZone(ctx, padding, plotW, y1, y2, fillStyle) {
   ctx.fillRect(padding.left, Math.min(y1, y2), plotW, Math.abs(y2 - y1));
 }
 
-function drawLevel(ctx, padding, plotW, y, color, label) {
+function layoutLevelLabels(items, top, bottom, minGap = 18) {
+  const arranged = items
+    .filter((item) => Number.isFinite(item.y))
+    .map((item) => ({ ...item, labelY: Math.max(top, Math.min(bottom, item.y)) }))
+    .sort((a, b) => a.labelY - b.labelY);
+
+  for (let index = 1; index < arranged.length; index += 1) {
+    arranged[index].labelY = Math.max(arranged[index].labelY, arranged[index - 1].labelY + minGap);
+  }
+  if (arranged.length && arranged[arranged.length - 1].labelY > bottom) {
+    arranged[arranged.length - 1].labelY = bottom;
+    for (let index = arranged.length - 2; index >= 0; index -= 1) {
+      arranged[index].labelY = Math.min(arranged[index].labelY, arranged[index + 1].labelY - minGap);
+    }
+  }
+  return arranged;
+}
+
+function drawLevels(ctx, padding, plotW, plotH, items) {
+  const labelX = padding.left + plotW - 116;
+  const arranged = layoutLevelLabels(items, padding.top + 10, padding.top + plotH - 8);
+  arranged.forEach((item) => drawLevel(ctx, padding, plotW, item.y, item.color));
+
+  ctx.save();
+  ctx.font = "12px Arial";
+  arranged.forEach((item) => {
+    const textWidth = ctx.measureText(item.label).width;
+    const textY = item.labelY - 5;
+    if (Math.abs(item.labelY - item.y) > 2) {
+      ctx.strokeStyle = item.color;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.moveTo(labelX - 7, item.y);
+      ctx.lineTo(labelX - 2, item.labelY);
+      ctx.stroke();
+    }
+    ctx.fillStyle = "rgba(255, 255, 255, 0.88)";
+    ctx.fillRect(labelX - 3, textY - 11, textWidth + 6, 15);
+    ctx.fillStyle = item.color;
+    ctx.fillText(item.label, labelX, textY);
+  });
+  ctx.restore();
+}
+
+function drawLevel(ctx, padding, plotW, y, color) {
   ctx.save();
   ctx.strokeStyle = color;
-  ctx.fillStyle = color;
   ctx.setLineDash([6, 5]);
   ctx.lineWidth = 1.6;
   ctx.beginPath();
   ctx.moveTo(padding.left, y);
   ctx.lineTo(padding.left + plotW, y);
   ctx.stroke();
-  ctx.setLineDash([]);
-  ctx.font = "12px Arial";
-  ctx.fillText(label, padding.left + plotW - 108, y - 6);
   ctx.restore();
 }
 
