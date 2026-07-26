@@ -507,7 +507,13 @@ function drawChart() {
       { y: yFor(levels.target), color: chartColors.target, label: "N目標 " + formatPrice(levels.target) }
     );
   }
-  drawLevels(ctx, padding, plotW, plotH, levelLabels);
+  const candleObstacles = candles.map((candle, index) => ({
+    left: xFor(index) - candleW / 2 - 3,
+    right: xFor(index) + candleW / 2 + 3,
+    top: yFor(candle.high) - 3,
+    bottom: yFor(candle.low) + 3
+  }));
+  drawLevels(ctx, padding, plotW, plotH, levelLabels, candleObstacles);
 
   candles.forEach((candle, index) => {
     const x = xFor(index);
@@ -579,8 +585,41 @@ function layoutLevelLabels(items, top, bottom, minGap = 18) {
   return arranged;
 }
 
-function drawLevels(ctx, padding, plotW, plotH, items) {
-  const labelX = padding.left + plotW - 116;
+function rectanglesOverlap(a, b) {
+  return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+}
+
+function findClearLabelX(labelY, textWidth, obstacles, plotLeft, plotRight) {
+  const boxWidth = textWidth + 8;
+  const minX = plotLeft + 6;
+  const maxX = Math.max(minX, plotRight - boxWidth - 6);
+  const labelBoxAt = (x) => ({
+    left: x - 4,
+    right: x + boxWidth,
+    top: labelY - 17,
+    bottom: labelY + 2
+  });
+  let bestX = maxX;
+  let fewestCollisions = Infinity;
+
+  // Prefer the latest-price side, but move left until the whole label clears
+  // candle bodies and wicks. Keep a least-colliding fallback for very dense charts.
+  for (let x = maxX; x >= minX; x -= 4) {
+    const labelBox = labelBoxAt(x);
+    const collisions = obstacles.reduce(
+      (count, obstacle) => count + (rectanglesOverlap(labelBox, obstacle) ? 1 : 0),
+      0
+    );
+    if (collisions === 0) return x;
+    if (collisions < fewestCollisions) {
+      fewestCollisions = collisions;
+      bestX = x;
+    }
+  }
+  return bestX;
+}
+
+function drawLevels(ctx, padding, plotW, plotH, items, candleObstacles = []) {
   const arranged = layoutLevelLabels(items, padding.top + 10, padding.top + plotH - 8);
   arranged.forEach((item) => drawLevel(ctx, padding, plotW, item.y, item.color));
 
@@ -588,13 +627,20 @@ function drawLevels(ctx, padding, plotW, plotH, items) {
   ctx.font = "12px Arial";
   arranged.forEach((item) => {
     const textWidth = ctx.measureText(item.label).width;
+    const labelX = findClearLabelX(
+      item.labelY,
+      textWidth,
+      candleObstacles,
+      padding.left,
+      padding.left + plotW
+    );
     const textY = item.labelY - 5;
-    if (Math.abs(item.labelY - item.y) > 2) {
+    if (Math.abs(item.labelY - item.y) > 2 || labelX < padding.left + plotW - textWidth - 18) {
       ctx.strokeStyle = item.color;
       ctx.lineWidth = 1;
       ctx.setLineDash([]);
       ctx.beginPath();
-      ctx.moveTo(labelX - 7, item.y);
+      ctx.moveTo(labelX - 9, item.y);
       ctx.lineTo(labelX - 2, item.labelY);
       ctx.stroke();
     }
