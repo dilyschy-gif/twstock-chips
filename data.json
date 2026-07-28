@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-28T11:23:09.054671+00:00",
+  "generated_at": "2026-07-28T11:24:58.391034+00:00",
   "source": "Google Sheet",
   "sheet_id": "1lxp1HcYfYP_vO7r9vKiI5YYmmPyVCHXIx80qkTuQ1D4",
   "sheet_tab": "選股結果",
@@ -7623,6 +7623,24 @@
       "relative_score": 20.0
     },
     {
+      "code": "2890",
+      "name": "永豐金",
+      "signal": "strong",
+      "score": 70.0,
+      "note": "紅燈；收斂觀察",
+      "mode": "contrarian",
+      "market": "",
+      "industry": "",
+      "price": 38.65,
+      "category": "",
+      "badges": "",
+      "market_light": "紅燈",
+      "tech_score": 0.0,
+      "chips_score": 0.0,
+      "vol_score": 0.0,
+      "relative_score": 20.0
+    },
+    {
       "code": "3045",
       "name": "台灣大",
       "signal": "watch",
@@ -7729,24 +7747,6 @@
       "chips_score": 0.0,
       "vol_score": 0.0,
       "relative_score": 20.0
-    },
-    {
-      "code": "2890",
-      "name": "永豐金",
-      "signal": "watch",
-      "score": 65.0,
-      "note": "紅燈；收斂觀察",
-      "mode": "contrarian",
-      "market": "",
-      "industry": "",
-      "price": 38.65,
-      "category": "",
-      "badges": "",
-      "market_light": "紅燈",
-      "tech_score": 0.0,
-      "chips_score": 0.0,
-      "vol_score": 0.0,
-      "relative_score": 15.0
     },
     {
       "code": "4536",
