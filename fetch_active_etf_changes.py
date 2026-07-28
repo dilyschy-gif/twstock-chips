@@ -880,6 +880,8 @@ def _history_report(report: dict[str, Any]) -> dict[str, Any]:
         "decreased",
         "top10_entered",
         "top10_exited",
+        "trend_3d",
+        "trend_5d",
     )
     return {key: report.get(key) for key in keys}
 
