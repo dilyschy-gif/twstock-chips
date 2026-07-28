@@ -142,6 +142,18 @@ function marketSymbolCell(item) {
     "<strong>" + etfEscapeHtml(item.symbol) + "</strong>";
 }
 
+function expandableClass(index, limit) {
+  return index >= limit ? ' class="expandable-row is-collapsed"' : "";
+}
+
+function renderExpandButton(total, limit) {
+  if (total <= limit) return "";
+  return '<button type="button" class="table-more table-expand-btn" aria-expanded="false">' +
+    '<span class="expand-label">展開全部（共' + total + '檔）</span>' +
+    '<span class="collapse-label">收合（顯示前' + limit + '檔）</span>' +
+    "</button>";
+}
+
 function renderPositionTable(items, type, keyword) {
   const filtered = items.filter((item) => matchesSearch(item, keyword));
   const isAdded = type === "added";
@@ -150,12 +162,12 @@ function renderPositionTable(items, type, keyword) {
     const message = keyword ? "沒有符合搜尋條件的股票" : "本次無" + label + "成分股";
     return '<div class="etf-empty">' + etfEscapeHtml(message) + "</div>";
   }
-  const shown = filtered.slice(0, 10);
+  const limit = 10;
   return '<div class="table-wrap etf-table-wrap"><table class="etf-change-table">' +
     "<thead><tr><th>市場／代號</th><th>名稱</th><th>" + label + "持有數</th><th>權重</th></tr></thead>" +
     "<tbody>" +
-    shown.map((item) =>
-      "<tr>" +
+    filtered.map((item, index) =>
+      "<tr" + expandableClass(index, limit) + ">" +
         "<td>" + marketSymbolCell(item) + "</td>" +
         "<td>" + etfEscapeHtml(item.name) + "</td>" +
         '<td class="position-value">' + etfEscapeHtml(positionText(item)) + "</td>" +
@@ -163,9 +175,7 @@ function renderPositionTable(items, type, keyword) {
       "</tr>"
     ).join("") +
     "</tbody></table>" +
-    (filtered.length > shown.length
-      ? '<div class="table-more">另有' + (filtered.length - shown.length) + "檔</div>"
-      : "") +
+    renderExpandButton(filtered.length, limit) +
     "</div>";
 }
 
@@ -176,16 +186,16 @@ function renderPositionChangeTable(items, direction, keyword) {
     const message = keyword ? "沒有符合搜尋條件的股票" : "本次無顯著" + label;
     return '<div class="etf-empty">' + etfEscapeHtml(message) + "</div>";
   }
-  const shown = filtered.slice(0, 10);
+  const limit = 10;
   return '<div class="table-wrap etf-table-wrap"><table class="etf-change-table weight-table">' +
     "<thead><tr><th>市場／代號</th><th>名稱</th><th>持股股數</th><th>校正後變動</th><th>權重漂移</th><th>趨勢</th></tr></thead>" +
     "<tbody>" +
-    shown.map((item) => {
+    filtered.map((item, index) => {
       const streak = Number(item.streak || 0);
       const streakText = Math.abs(streak) >= 3
         ? "連續" + Math.abs(streak) + "日" + (streak > 0 ? "加碼" : "減碼")
         : Math.abs(Number(item.position_change_pct)) >= 5 ? "明顯調整" : "持股調整";
-      return "<tr>" +
+      return "<tr" + expandableClass(index, limit) + ">" +
         "<td>" + marketSymbolCell(item) + "</td>" +
         "<td>" + etfEscapeHtml(item.name) + "</td>" +
         "<td>" + etfEscapeHtml(formatNumber(item.previous_shares)) + " → " +
@@ -203,9 +213,7 @@ function renderPositionChangeTable(items, direction, keyword) {
       "</tr>";
     }).join("") +
     "</tbody></table>" +
-    (filtered.length > shown.length
-      ? '<div class="table-more">另有' + (filtered.length - shown.length) + "檔</div>"
-      : "") +
+    renderExpandButton(filtered.length, limit) +
     "</div>";
 }
 
@@ -214,12 +222,12 @@ function renderTrendTable(items, label, keyword) {
   if (!filtered.length) {
     return '<div class="etf-empty">本次無符合門檻的' + etfEscapeHtml(label) + "趨勢</div>";
   }
-  const shown = filtered.slice(0, 8);
+  const limit = 8;
   return '<div class="table-wrap etf-table-wrap"><table class="etf-change-table trend-table">' +
     "<thead><tr><th>市場／代號</th><th>名稱</th><th>" + etfEscapeHtml(label) + "校正後持股變化</th><th>權重漂移</th></tr></thead>" +
     "<tbody>" +
-    shown.map((item) =>
-      "<tr>" +
+    filtered.map((item, index) =>
+      "<tr" + expandableClass(index, limit) + ">" +
         "<td>" + marketSymbolCell(item) + "</td>" +
         "<td>" + etfEscapeHtml(item.name) + "</td>" +
         '<td class="weight-shift ' + (Number(item.adjusted_share_change) > 0 ? "positive" : "negative") + '">' +
@@ -234,9 +242,7 @@ function renderTrendTable(items, label, keyword) {
       "</tr>"
     ).join("") +
     "</tbody></table>" +
-    (filtered.length > shown.length
-      ? '<div class="table-more">另有' + (filtered.length - shown.length) + "檔</div>"
-      : "") +
+    renderExpandButton(filtered.length, limit) +
     "</div>";
 }
 
@@ -419,17 +425,25 @@ function renderConsensusItem(item, direction) {
   "</details>";
 }
 
+function renderConsensusList(items, direction, emptyMessage) {
+  const limit = 10;
+  if (!items.length) return '<div class="etf-empty">' + etfEscapeHtml(emptyMessage) + "</div>";
+  return items.map((item, index) =>
+    '<div' + (index >= limit ? ' class="expandable-item is-collapsed"' : "") + ">" +
+      renderConsensusItem(item, direction) +
+    "</div>"
+  ).join("") + renderExpandButton(items.length, limit);
+}
+
 function renderConsensus(batch) {
   const region = activeEtfElements.consensusRegion.value;
   const consensus = batch.consensus?.[region] || { bullish: [], bearish: [] };
-  const bullish = asArray(consensus.bullish).slice(0, 10);
-  const bearish = asArray(consensus.bearish).slice(0, 10);
-  activeEtfElements.bullishConsensus.innerHTML = bullish.length
-    ? bullish.map((item) => renderConsensusItem(item, "bullish")).join("")
-    : '<div class="etf-empty">本批次沒有共識加碼訊號</div>';
-  activeEtfElements.bearishConsensus.innerHTML = bearish.length
-    ? bearish.map((item) => renderConsensusItem(item, "bearish")).join("")
-    : '<div class="etf-empty">本批次沒有共識減碼訊號</div>';
+  const bullish = asArray(consensus.bullish);
+  const bearish = asArray(consensus.bearish);
+  activeEtfElements.bullishConsensus.innerHTML =
+    renderConsensusList(bullish, "bullish", "本批次沒有共識加碼訊號");
+  activeEtfElements.bearishConsensus.innerHTML =
+    renderConsensusList(bearish, "bearish", "本批次沒有共識減碼訊號");
 }
 
 function groupMatches(etf, group) {
@@ -543,5 +557,16 @@ activeEtfElements.filter.addEventListener("change", renderActiveEtfs);
 activeEtfElements.consensusRegion.addEventListener("change", renderActiveEtfs);
 activeEtfElements.search.addEventListener("input", renderActiveEtfs);
 activeEtfElements.reloadBtn.addEventListener("click", loadActiveEtfs);
+
+document.addEventListener("click", (event) => {
+  const button = event.target.closest(".table-expand-btn");
+  if (!button) return;
+  const container = button.parentElement;
+  const expanded = button.getAttribute("aria-expanded") === "true";
+  container.querySelectorAll(".expandable-row, .expandable-item").forEach((item) => {
+    item.classList.toggle("is-collapsed", expanded);
+  });
+  button.setAttribute("aria-expanded", String(!expanded));
+});
 
 loadActiveEtfs();
