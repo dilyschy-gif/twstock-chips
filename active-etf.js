@@ -456,17 +456,21 @@ function populateEtfFilter() {
 }
 
 function populateBatchFilter() {
-  const history = asArray(activeEtfPayload.history);
-  activeEtfElements.batchFilter.innerHTML = history
-    .slice()
-    .reverse()
-    .map((item, index) =>
-      '<option value="' + etfEscapeHtml(item.batch_date) + '">' +
-      etfEscapeHtml(formatEtfDate(item.batch_date)) +
-      (index === 0 ? "（最新）" : "") +
-      "</option>"
-    )
-    .join("");
+  const history = asArray(activeEtfPayload.history)
+    .filter((item) => item.batch_date !== activeEtfPayload.batch_date);
+  activeEtfElements.batchFilter.innerHTML =
+    '<option value="__latest__">' +
+      etfEscapeHtml(formatEtfDate(activeEtfPayload.batch_date)) +
+      "（最新）</option>" +
+    history
+      .slice()
+      .reverse()
+      .map((item) =>
+        '<option value="' + etfEscapeHtml(item.batch_date) + '">' +
+        etfEscapeHtml(formatEtfDate(item.batch_date)) +
+        "</option>"
+      )
+      .join("");
 }
 
 function renderActiveEtfs() {
