@@ -2,8 +2,8 @@ name: Daily Active ETF Constituents
 
 on:
   schedule:
-    # 21:30 Asia/Taipei, Monday-Friday: domestic ETFs and first foreign pass.
-    - cron: "30 13 * * 1-5"
+    # 18:00 Asia/Taipei, Monday-Friday: domestic ETFs and first foreign pass.
+    - cron: "0 10 * * 1-5"
     # 08:00 Asia/Taipei, Tuesday-Saturday: catch later foreign disclosures.
     - cron: "0 0 * * 2-6"
   workflow_dispatch:
