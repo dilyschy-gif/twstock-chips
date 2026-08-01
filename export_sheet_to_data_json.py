@@ -127,6 +127,10 @@ def build_col_map(headers: List[str]) -> Dict[str, int]:
         "industry": ["產業", "產業別", "industry"],
         "price": ["現價", "收盤價", "close", "price"],
         "bb_signal": ["BB訊號", "BB", "訊號"],
+        # 退場參考價位（2026-08 新增）。這兩個值主掃描一直都有算、也一直寫在
+        # 試算表裡，只是從來沒被帶到前端。n_target 是停利位、start_price 是停損位。
+        "n_target": ["N字目標", "nTarget", "n_target"],
+        "start_price": ["起漲點", "startPrice", "start_price"],
         # 「分類」是 2026-08 起 main_stock_scanner.py 使用的正式標題。
         # 「命中率」是修正前的誤植標題，保留在別名中，讓尚未重跑主掃描的
         # 舊資料仍可正確解析（重跑後標題會自動換成「分類」）。
@@ -281,6 +285,10 @@ def row_to_stock(row: List[str], col: Dict[str, int], mode: str, defaults: Optio
         # 逐檔資料日：讓前端可以標出「這一檔的籌碼掛的是舊日期」，
         # 對應 README 檢驗流程第 4 步「新鮮度」。
         "data_date": row_data_date(row, col, mode),
+        # 退場參考價位。注意這是「價位」不是「訊號」——程式不會叫你賣，
+        # 只是把一直存在試算表裡的兩個數字帶到看得見的地方。
+        "n_target": parse_num(get_cell(row, col, "n_target")),
+        "start_price": parse_num(get_cell(row, col, "start_price")),
         "tech_score": parse_num(get_cell(row, col, "tech_score")),
         "chips_score": parse_num(get_cell(row, col, "chips_score")),
         "vol_score": parse_num(get_cell(row, col, "vol_score")),
