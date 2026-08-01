@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-01T07:27:49.296694+00:00",
-  "generated_at_taipei": "2026/08/01 15:27",
+  "generated_at": "2026-08-01T07:28:46.453342+00:00",
+  "generated_at_taipei": "2026/08/01 15:28",
   "data_date": "2026-07-31",
   "source": "Google Sheet",
   "sheet_id": "1lxp1HcYfYP_vO7r9vKiI5YYmmPyVCHXIx80qkTuQ1D4",
@@ -8779,25 +8779,6 @@
       "market": "",
       "industry": "",
       "price": 74.6,
-      "category": "",
-      "badges": "",
-      "market_light": "平燈",
-      "data_date": "",
-      "tech_score": 0.0,
-      "chips_score": 0.0,
-      "vol_score": 0.0,
-      "relative_score": 0.0
-    },
-    {
-      "code": "2546",
-      "name": "根基",
-      "signal": "watch",
-      "score": 55.0,
-      "note": "平燈；起漲突破",
-      "mode": "contrarian",
-      "market": "",
-      "industry": "",
-      "price": 101.5,
       "category": "",
       "badges": "",
       "market_light": "平燈",
@@ -22327,7 +22308,7 @@
     "contrarian": {
       "label": "逆勢抗跌",
       "sheet_tab": "逆勢抗跌掃描",
-      "count": 197,
+      "count": 196,
       "data_date": ""
     },
     "v_reversal": {
