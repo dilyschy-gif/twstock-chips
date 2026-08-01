@@ -84,7 +84,7 @@ const modeCopy = {
       "V0：連跌超賣，等待第一根合格紅K。",
       "V1：強紅K收近最高、無長上影，先守紅K中值。",
       "V2：站上第一確認價；V3：已收復跌幅50%，不再視為最早買點。",
-      "漲停鎖住可接受較低量比；長上影與跌破V底一律排除。"
+      "VX：已失效（跌破V底／連兩日破紅K中值／第三日未站回MA5），排在最後。"
     ]
   }
 };
@@ -141,6 +141,10 @@ function normalizeStock(item) {
     trustStreak: trustMatch ? Number(trustMatch[1]) : 0,
     market: String(item.market ?? item.market_type ?? "").trim(),
     marketLight: String(item.market_light ?? item.marketLight ?? "").trim(),
+    // 退場參考所需（2026-08 新增）。price 是最新收盤，用來判斷是否已觸及價位。
+    price: numberOrNull(item.price),
+    nTarget: numberOrNull(item.n_target ?? item.nTarget),
+    startPrice: numberOrNull(item.start_price ?? item.startPrice),
     // 逐檔資料日：由 export_sheet_to_data_json.py 從 chipsDetail 解析。
     // README 檢驗流程第 4 步「新鮮度」用得到——掛舊日期代表該股所屬市場資料缺漏。
     dataDate: String(item.data_date ?? item.dataDate ?? "").trim(),
@@ -297,6 +301,40 @@ function renderLastUpdated() {
     : "尚未載入 data.json";
 }
 
+// ══════════ 退場參考價位（2026-08 新增） ══════════
+// 重要：這是「參考價位」，不是「退場訊號」。程式不會叫你賣。
+//
+// 這兩組數字主掃描與 v_reversal 一直都有算，也一直寫在試算表裡，
+// 只是從來沒被帶到看得見的地方。這裡只做一件事：停止隱藏。
+//
+//   主升段／右腳／逆勢：停利 = N字目標、停損 = 起漲點
+//   V型反轉：           失效 = 失效價、防守 = 紅K中值
+//
+// 真正的退場訊號（訊號失效偵測、停損％、時間停損）需要持倉表與進場當下的
+// 條件快照，尚未實作。在有真實命中率之前，那些門檻設多少都是憑感覺。
+function buildExitLevels(stock) {
+  const usable = (value) => Number.isFinite(value) && value > 0;
+  const parts = [];
+
+  if (stock.vState) {
+    if (stock.vState === "VX") parts.push("已失效");
+    if (usable(stock.invalidPrice)) parts.push("失效 " + formatPrice(stock.invalidPrice));
+    if (usable(stock.triggerMid)) parts.push("防守 " + formatPrice(stock.triggerMid));
+    return parts.join(" · ");
+  }
+
+  const price = stock.price;
+  if (usable(stock.nTarget)) {
+    const reached = usable(price) && price >= stock.nTarget;
+    parts.push((reached ? "✓已達停利 " : "停利 ") + formatPrice(stock.nTarget));
+  }
+  if (usable(stock.startPrice)) {
+    const broken = usable(price) && price <= stock.startPrice;
+    parts.push((broken ? "⚠已破停損 " : "停損 ") + formatPrice(stock.startPrice));
+  }
+  return parts.join(" · ");
+}
+
 function renderModeText() {
   const copy = modeCopy[currentMode];
   const meta = datasetMeta[currentMode] || {};
@@ -321,17 +359,23 @@ function render() {
   renderLastUpdated();
 
   if (filteredStocks.length === 0) {
-    elements.stockRows.innerHTML = '<tr><td colspan="5">沒有符合條件的股票。</td></tr>';
+    elements.stockRows.innerHTML = '<tr><td colspan="6">沒有符合條件的股票。</td></tr>';
     return;
   }
 
   elements.stockRows.innerHTML = filteredStocks.map((stock) => {
     const note = stock.marketLight ? "[" + stock.marketLight + "] " + stock.note : stock.note;
+    const exitLevels = buildExitLevels(stock);
+    const exitAlert = exitLevels.includes("已達") || exitLevels.includes("已破") || exitLevels.includes("已失效");
+    const exitCell = exitAlert
+      ? '<td style="color:#b45309;font-weight:700;">' + escapeHtml(exitLevels) + '</td>'
+      : '<td>' + escapeHtml(exitLevels || "-") + '</td>';
     return '<tr class="stock-row" data-code="' + escapeHtml(stock.code) + '" tabindex="0" title="點擊查看 K 線圖">' +
       '<td><strong>' + escapeHtml(stock.code) + '</strong></td>' +
       '<td>' + escapeHtml(stock.name) + '</td>' +
       '<td><span class="badge ' + stock.signal + '">' + signalLabel[stock.signal] + '</span></td>' +
       '<td>' + (Number.isFinite(stock.score) ? stock.score : 0) + '</td>' +
+      exitCell +
       '<td>' + escapeHtml(note || "-") + '</td>' +
     '</tr>';
   }).join("");
