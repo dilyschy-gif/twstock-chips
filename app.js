@@ -335,16 +335,28 @@ async function loadChart(stock, days) {
       high: Number(item.high),
       low: Number(item.low),
       close: Number(item.close),
-      volume: Number(item.volume || 0)
+      volume: Number(item.volume || 0),
+      // partial=true 代表這根 K 棒由 /api/kline 用收盤價補齊（當日尚未結算）
+      partial: Boolean(item.partial)
     })).filter((item) => Number.isFinite(item.close));
 
     if (candles.length < 20) throw new Error("K 線資料不足，暫時無法畫出區間");
+
+    // K 線來自 Yahoo、掃描訊號來自 Google Sheet，是兩個獨立資料源。
+    // 這裡不強求同步，但要讓不同步「看得見」。
+    const freshness = buildFreshnessInfo(stock, candles, payload);
+
     const levels = isVReversal ? buildVReversalLevels(stock, candles) : calculateNTheoryLevels(candles);
-    chartState = { stock, candles, levels, hoverIndex: null, symbol: payload.symbol, days, mode: isVReversal ? "v_reversal" : "n" };
+    chartState = { stock, candles, levels, hoverIndex: null, symbol: payload.symbol, days, mode: isVReversal ? "v_reversal" : "n", freshness };
     elements.chartStatus.hidden = true;
-    renderChartStats(stock, candles, levels, payload.symbol, days);
+    renderChartStats(stock, candles, levels, payload.symbol, days, freshness);
     drawChart();
-    setStatus("K 線已載入", stock.code + " 近 " + candles.length + " 日資料");
+
+    if (freshness.stale) {
+      setStatus("K 線資料落後", stock.code + " 圖表最新 " + freshness.chartDate + "，訊號日 " + freshness.signalDate);
+    } else {
+      setStatus("K 線已載入", stock.code + " 近 " + candles.length + " 日資料");
+    }
   } catch (error) {
     elements.chartStatus.hidden = false;
     elements.chartStatus.textContent = error.message;
@@ -435,12 +447,54 @@ function findExtremeIndex(rows, field) {
   return bestIndex;
 }
 
-function renderChartStats(stock, candles, levels, symbol, days) {
+// 比對「圖表最新日」與「掃描訊號日」，回傳可供顯示的落後資訊。
+// stock.triggerDate 來自 Google Sheet 的轉折日；chartDate 來自 /api/kline。
+function buildFreshnessInfo(stock, candles, payload) {
+  const latest = candles[candles.length - 1] || null;
+  const chartDate = String((payload && payload.lastDate) || (latest && latest.date) || "").trim();
+  const signalDate = String((stock && stock.triggerDate) || "").trim();
+  const isDate = (value) => /^\d{4}-\d{2}-\d{2}$/.test(value);
+
+  return {
+    chartDate: chartDate,
+    signalDate: signalDate,
+    // 只有兩邊都是合法日期、且圖表日「早於」訊號日，才算落後。
+    // 圖表比訊號新是正常的（盤中已更新但掃描尚未重跑），不示警。
+    stale: isDate(chartDate) && isDate(signalDate) && chartDate < signalDate,
+    partial: Boolean(latest && latest.partial),
+    fetchedAt: String((payload && payload.fetchedAt) || "").trim(),
+    dropped: Number((payload && payload.dropped) || 0)
+  };
+}
+
+function renderFreshnessNotice(freshness) {
+  if (!freshness) return "";
+
+  if (freshness.stale) {
+    const detail = "圖表資料到 " + formatDate(freshness.chartDate) +
+      "，但掃描訊號日是 " + formatDate(freshness.signalDate) +
+      "。價位線來自試算表（已是最新），K 線尚未跟上，請以價位線為準。";
+    return '<span style="grid-column:1/-1;color:#b45309;background:rgba(180,83,9,0.08);' +
+      'border-left:3px solid #b45309;padding:8px 10px;border-radius:4px;">' +
+      '<strong>⚠ 資料落後</strong>' + escapeHtml(detail) + '</span>';
+  }
+
+  if (freshness.partial) {
+    return '<span style="grid-column:1/-1;color:#0f766e;">' +
+      '<strong>盤中資料</strong>最後一根 K 棒尚未結算，僅收盤價可信。</span>';
+  }
+
+  return "";
+}
+
+function renderChartStats(stock, candles, levels, symbol, days, freshness) {
   const latest = candles[candles.length - 1];
   const latestDate = formatDate(latest.date);
+  const notice = renderFreshnessNotice(freshness);
   if (levels.type === "v_reversal") {
     const midpointText = levels.hasTriggerMid ? formatPrice(levels.entryLow) : "尚未出現";
     elements.chartStats.innerHTML = [
+      notice,
       '<span><strong>狀態 / 期間</strong>' + escapeHtml(stock.vState || "V型") + ' · ' + escapeHtml(String(days)) + ' 日</span>',
       '<span><strong>最新收盤</strong>' + escapeHtml(formatPrice(latest.close)) + '（' + escapeHtml(latestDate) + '）</span>',
       '<span><strong>防守</strong>V底 ' + escapeHtml(formatPrice(levels.support)) + ' · 紅K中值 ' + escapeHtml(midpointText) + '</span>',
@@ -450,6 +504,7 @@ function renderChartStats(stock, candles, levels, symbol, days) {
   }
   const rangeText = "防守區 " + formatPrice(levels.support) + " - " + formatPrice(levels.neckline) + "；突破區 " + formatPrice(levels.entryLow) + " - " + formatPrice(levels.entryHigh) + "；N 目標 " + formatPrice(levels.target);
   elements.chartStats.innerHTML = [
+    notice,
     '<span><strong>期間</strong>' + escapeHtml(String(days)) + ' 日 · ' + escapeHtml(symbol || "") + '</span>',
     '<span><strong>最新收盤</strong>' + escapeHtml(formatPrice(latest.close)) + '（' + escapeHtml(latestDate) + '）</span>',
     '<span><strong>頸線</strong>' + escapeHtml(formatPrice(levels.neckline)) + '</span>',
