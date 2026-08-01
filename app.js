@@ -15,6 +15,31 @@ let chartRangeDays = 60;
 let chartTooltipPinned = false;
 let chartTouchStart = null;
 
+// ══════════ 資料新鮮度（2026-08 BUG-1 修正） ══════════
+// 修正前：render() 直接用 new Date() 當「最後更新」，那是**使用者開啟網頁的時間**，
+//         不是資料的時間。data.json 三天沒更新，畫面照樣顯示「剛剛」，
+//         等於把資料管線中斷這件事藏起來——最危險的一種假新鮮。
+// 修正後：只顯示 data.json 帶進來的兩個時間：
+//         data_date            資料對應的交易日（由 export_sheet_to_data_json.py
+//                              從 chipsDetail 開頭日期解析）
+//         generated_at_taipei  匯出當下的台北時間
+//         再依落後幾個交易日決定顏色與是否加 ⚠。
+//
+// 交易日差以「跳過週六日」計算。台灣國定假日沒有納入（前端沒有行事曆），
+// 所以長假後可能出現一次善意的誤報。寧可多提醒，不要漏報。
+let payloadMeta = { generatedAt: "", generatedAtTaipei: "", dataDate: "", isDemo: true };
+
+const FRESHNESS_WARN_SESSIONS = 2;   // 落後 2 個交易日以上 → 橘字提醒
+const FRESHNESS_ALERT_SESSIONS = 4;  // 落後 4 個交易日以上 → 紅字警示
+
+const freshnessStyles = {
+  demo: { color: "#6b7280", weight: "400" },
+  unknown: { color: "#6b7280", weight: "400" },
+  fresh: { color: "#0f766e", weight: "400" },
+  warn: { color: "#b45309", weight: "700" },
+  alert: { color: "#b91c1c", weight: "700" }
+};
+
 const chartColors = {
   up: "#dc2626",
   down: "#047857",
@@ -116,6 +141,9 @@ function normalizeStock(item) {
     trustStreak: trustMatch ? Number(trustMatch[1]) : 0,
     market: String(item.market ?? item.market_type ?? "").trim(),
     marketLight: String(item.market_light ?? item.marketLight ?? "").trim(),
+    // 逐檔資料日：由 export_sheet_to_data_json.py 從 chipsDetail 解析。
+    // README 檢驗流程第 4 步「新鮮度」用得到——掛舊日期代表該股所屬市場資料缺漏。
+    dataDate: String(item.data_date ?? item.dataDate ?? "").trim(),
     vState: String(item.v_state ?? item.vState ?? "").trim(),
     leftDropPct: numberOrNull(item.left_drop_pct ?? item.leftDropPct),
     rsi14: numberOrNull(item.rsi14),
@@ -195,6 +223,80 @@ function getFilteredStocks() {
   });
 }
 
+// ══════════ 資料新鮮度計算 ══════════
+
+function startOfToday() {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+}
+
+function parseIsoDateOnly(value) {
+  const text = String(value || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return null;
+  const date = new Date(text + "T00:00:00");
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+// 兩個日期之間隔了幾個交易日（跳過週六日；不含國定假日）。
+function tradingDaysBetween(fromDate, toDate) {
+  if (!fromDate || !toDate || toDate <= fromDate) return 0;
+  let count = 0;
+  const cursor = new Date(fromDate.getTime());
+  // 上限 400 天，避免資料異常時無限迴圈。
+  for (let guard = 0; guard < 400 && cursor < toDate; guard += 1) {
+    cursor.setDate(cursor.getDate() + 1);
+    const weekday = cursor.getDay();
+    if (weekday !== 0 && weekday !== 6) count += 1;
+  }
+  return count;
+}
+
+// 目前分頁的資料日：優先用該 dataset 自己的，退回全域值。
+function currentDataDate() {
+  const meta = datasetMeta[currentMode] || {};
+  return String(meta.data_date || payloadMeta.dataDate || "").trim();
+}
+
+function buildDataFreshness() {
+  if (payloadMeta.isDemo) {
+    return { level: "demo", text: "示範資料（未載入 data.json）" };
+  }
+
+  const rawDataDate = currentDataDate();
+  const parts = [];
+  parts.push(rawDataDate ? "資料日 " + formatDate(rawDataDate) : "資料日 未知");
+  if (payloadMeta.generatedAtTaipei) {
+    parts.push("匯出 " + payloadMeta.generatedAtTaipei);
+  }
+  const baseText = parts.join(" · ");
+
+  const dataDate = parseIsoDateOnly(rawDataDate);
+  if (!dataDate) {
+    return { level: "unknown", text: baseText };
+  }
+
+  const lag = tradingDaysBetween(dataDate, startOfToday());
+  if (lag >= FRESHNESS_ALERT_SESSIONS) {
+    return { level: "alert", text: baseText + "（落後約 " + lag + " 個交易日）" };
+  }
+  if (lag >= FRESHNESS_WARN_SESSIONS) {
+    return { level: "warn", text: baseText + "（落後約 " + lag + " 個交易日）" };
+  }
+  return { level: "fresh", text: baseText };
+}
+
+function renderLastUpdated() {
+  const freshness = buildDataFreshness();
+  const style = freshnessStyles[freshness.level] || freshnessStyles.unknown;
+  const needsFlag = freshness.level === "warn" || freshness.level === "alert";
+  elements.lastUpdated.textContent = (needsFlag ? "⚠ " : "") + freshness.text;
+  elements.lastUpdated.style.color = style.color;
+  elements.lastUpdated.style.fontWeight = style.weight;
+  elements.lastUpdated.title = payloadMeta.generatedAt
+    ? "generated_at：" + payloadMeta.generatedAt
+    : "尚未載入 data.json";
+}
+
 function renderModeText() {
   const copy = modeCopy[currentMode];
   const meta = datasetMeta[currentMode] || {};
@@ -215,7 +317,8 @@ function render() {
   elements.totalCount.textContent = String(stocks.length);
   elements.strongCount.textContent = String(strongCount);
   elements.watchCount.textContent = String(watchCount);
-  elements.lastUpdated.textContent = new Date().toLocaleString("zh-TW", { hour12: false });
+  // 顯示資料本身的時間，不是瀏覽器現在的時間。
+  renderLastUpdated();
 
   if (filteredStocks.length === 0) {
     elements.stockRows.innerHTML = '<tr><td colspan="5">沒有符合條件的股票。</td></tr>';
@@ -272,16 +375,38 @@ async function loadJsonData() {
     if (!datasetMeta.v_reversal) {
       datasetMeta.v_reversal = { sheet_tab: payload.v_reversal_sheet_tab || "V型反轉掃描" };
     }
+    // 右腳醞釀是從主升段前端過濾出來的，資料日與主升段相同。
+    if (datasetMeta.main && datasetMeta.main.data_date && !datasetMeta.brewing.data_date) {
+      datasetMeta.brewing.data_date = datasetMeta.main.data_date;
+    }
+
+    // 時間戳一律取自 payload；舊版 data.json 沒有這些欄位時留空，
+    // 前端會顯示「資料日 未知」，而不是拿瀏覽器時間充數。
+    payloadMeta = {
+      generatedAt: String(payload.generated_at || "").trim(),
+      generatedAtTaipei: String(payload.generated_at_taipei || "").trim(),
+      dataDate: String(payload.data_date || "").trim(),
+      isDemo: false
+    };
+
     dataSource = payload.source || "data.json";
     render();
-    setStatus(
-      "資料已更新",
+
+    const freshness = buildDataFreshness();
+    const countDetail =
       "主升段 " + datasets.main.length + " 筆；逆勢抗跌 " + datasets.contrarian.length +
-      " 筆；右腳醞釀 " + datasets.brewing.length + " 筆；V型反轉 " + datasets.v_reversal.length + " 筆"
-    );
+      " 筆；右腳醞釀 " + datasets.brewing.length + " 筆；V型反轉 " + datasets.v_reversal.length + " 筆";
+
+    if (freshness.level === "alert" || freshness.level === "warn") {
+      setStatus("資料可能過期", freshness.text + "｜" + countDetail);
+    } else {
+      setStatus("資料已更新", countDetail);
+    }
   } catch (error) {
     dataSource = "Demo";
     datasets = { main: [...demoStocks], contrarian: [], brewing: [], v_reversal: [] };
+    payloadMeta = { generatedAt: "", generatedAtTaipei: "", dataDate: "", isDemo: true };
+    datasetMeta = {};
     render();
     setStatus("使用示範資料", error.message);
   }
@@ -449,10 +574,11 @@ function findExtremeIndex(rows, field) {
 
 // 比對「圖表最新日」與「掃描訊號日」，回傳可供顯示的落後資訊。
 // stock.triggerDate 來自 Google Sheet 的轉折日；chartDate 來自 /api/kline。
+// 主升段沒有轉折日，退回用該檔的 dataDate（chipsDetail 解析出的資料日）。
 function buildFreshnessInfo(stock, candles, payload) {
   const latest = candles[candles.length - 1] || null;
   const chartDate = String((payload && payload.lastDate) || (latest && latest.date) || "").trim();
-  const signalDate = String((stock && stock.triggerDate) || "").trim();
+  const signalDate = String((stock && (stock.triggerDate || stock.dataDate)) || "").trim();
   const isDate = (value) => /^\d{4}-\d{2}-\d{2}$/.test(value);
 
   return {

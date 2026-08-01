@@ -3,11 +3,35 @@
 
 This script reads the sheet tabs written by the scanners and converts them to
 frontend-friendly JSON for app.js.
+
+2026-08 修正（BUG-1 資料時間戳）
+────────────────────────────────
+問題：app.js 的「最後更新」顯示 `new Date()`，那是使用者開網頁的時間，
+      不是資料的時間。data.json 就算三天沒更新，畫面也永遠顯示「剛剛」，
+      等於把資料管線中斷這件事藏起來。
+
+本檔負責產出時間戳的「資料端」，共三個欄位：
+
+  generated_at         匯出當下的 UTC ISO 時間（原本就有，保留不動，向後相容）
+  generated_at_taipei  同一時刻的台北時間可讀字串，例如 2026/08/01 09:12
+  data_date            **資料實際對應的交易日**，例如 2026-07-31
+
+前兩者回答「這份 JSON 什麼時候產的」，第三個回答「這份 JSON 講的是哪一天的盤」。
+兩者會不一樣：週六早上重跑匯出，generated_at 是週六，data_date 仍是週五。
+前端要判斷新鮮度，看的是 data_date。
+
+data_date 從哪來：
+  主升段／逆勢：chipsDetail 欄位開頭的日期，格式如
+                「2026-07-31 三法人合計1667張；...」
+  V型反轉：     轉折日欄位
+取該分頁所有列的最大值。若整頁都解析不到日期，回傳空字串，前端會顯示「未知」
+而不是假裝知道。
 """
 
 import datetime
 import json
 import os
+import re
 from typing import Dict, List, Optional, Tuple
 
 try:
@@ -25,6 +49,8 @@ SCOPES = [
 SHEET_ID = os.environ.get("GOOGLE_SHEET_ID", "")
 SHEET_SELECTION = os.environ.get("EXPORT_SHEET_NAME", "選股結果")
 OUTPUT_PATH = os.environ.get("DATA_JSON_PATH", "data.json")
+TAIPEI_TZ = datetime.timezone(datetime.timedelta(hours=8))
+
 CONTRARIAN_SHEET_CANDIDATES = [
     name.strip()
     for name in os.environ.get(
@@ -42,6 +68,9 @@ V_REVERSAL_SHEET_CANDIDATES = [
     if name.strip()
 ]
 
+# 接受 2026-07-31 / 2026/07/31 / 2026.07.31 三種寫法，取第一個出現的日期。
+DATE_PATTERN = re.compile(r"(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})")
+
 
 def safe_text(value) -> str:
     return str(value).strip() if value is not None else ""
@@ -53,6 +82,27 @@ def parse_num(value) -> float:
         return float(text) if text else 0.0
     except (TypeError, ValueError):
         return 0.0
+
+
+def parse_any_date(value) -> str:
+    """從任意字串抽出第一個日期，正規化成 YYYY-MM-DD；找不到回傳空字串。
+
+    用於 chipsDetail（開頭是日期）與轉折日（整格就是日期）。
+    會驗證日期真實存在，避免把 2026-13-45 這種雜訊當成日期。
+    """
+    text = safe_text(value)
+    if not text:
+        return ""
+
+    match = DATE_PATTERN.search(text)
+    if not match:
+        return ""
+
+    year, month, day = (int(part) for part in match.groups())
+    try:
+        return datetime.date(year, month, day).strftime("%Y-%m-%d")
+    except ValueError:
+        return ""
 
 
 def get_client():
@@ -77,7 +127,10 @@ def build_col_map(headers: List[str]) -> Dict[str, int]:
         "industry": ["產業", "產業別", "industry"],
         "price": ["現價", "收盤價", "close", "price"],
         "bb_signal": ["BB訊號", "BB", "訊號"],
-        "category": ["命中率", "分類", "category", "結果", "狀態"],
+        # 「分類」是 2026-08 起 main_stock_scanner.py 使用的正式標題。
+        # 「命中率」是修正前的誤植標題，保留在別名中，讓尚未重跑主掃描的
+        # 舊資料仍可正確解析（重跑後標題會自動換成「分類」）。
+        "category": ["分類", "命中率", "category", "結果", "狀態"],
         "score": ["compositeScore", "totalScore", "score", "分數", "總分", "抗跌分數", "V分數"],
         "tech_score": ["techScore", "技術分"],
         "chips_score": ["chipsScore", "籌碼分"],
@@ -86,7 +139,8 @@ def build_col_map(headers: List[str]) -> Dict[str, int]:
         "market_light": ["大盤燈號", "marketLight", "燈號"],
         "badges": ["badges", "標籤", "條件"],
         "chips_detail": ["chipsDetail", "籌碼細節", "法人", "投信", "外資"],
-        "block_reason": ["volDetail", "blockReason", "原因", "備註", "note"],
+        # 同上：「備註」為正式標題，「volDetail」為修正前誤植標題，保留相容。
+        "block_reason": ["備註", "volDetail", "blockReason", "原因", "note"],
         "v_state": ["V狀態", "vState", "v_state"],
         "left_drop_pct": ["左臂跌幅", "leftDropPct", "left_drop_pct"],
         "rsi14": ["RSI14", "RSI", "rsi14"],
@@ -149,6 +203,15 @@ def get_cell(row: List[str], col: Dict[str, int], key: str, default: str = "") -
     if idx is None or idx >= len(row):
         return default
     return safe_text(row[idx])
+
+
+def row_data_date(row: List[str], col: Dict[str, int], mode: str) -> str:
+    """單列的資料日。主升段／逆勢看 chipsDetail 開頭日期，V型看轉折日。"""
+    if mode == "v_reversal":
+        return parse_any_date(get_cell(row, col, "trigger_date")) or \
+            parse_any_date(get_cell(row, col, "chips_detail"))
+    return parse_any_date(get_cell(row, col, "chips_detail")) or \
+        parse_any_date(get_cell(row, col, "trigger_date"))
 
 
 def frontend_signal(category: str, badges: str, score: float, mode: str = "main") -> str:
@@ -215,6 +278,9 @@ def row_to_stock(row: List[str], col: Dict[str, int], mode: str, defaults: Optio
         "category": category,
         "badges": badges,
         "market_light": market_light,
+        # 逐檔資料日：讓前端可以標出「這一檔的籌碼掛的是舊日期」，
+        # 對應 README 檢驗流程第 4 步「新鮮度」。
+        "data_date": row_data_date(row, col, mode),
         "tech_score": parse_num(get_cell(row, col, "tech_score")),
         "chips_score": parse_num(get_cell(row, col, "chips_score")),
         "vol_score": parse_num(get_cell(row, col, "vol_score")),
@@ -243,11 +309,12 @@ def row_to_stock(row: List[str], col: Dict[str, int], mode: str, defaults: Optio
     return stock
 
 
-def read_sheet_rows(sh, sheet_name: str, mode: str) -> Tuple[List[Dict], Optional[str]]:
+def read_sheet_rows(sh, sheet_name: str, mode: str) -> Tuple[List[Dict], Optional[str], str]:
+    """回傳 (股票清單, 分頁名稱, 該分頁資料日)。"""
     ws = sh.worksheet(sheet_name)
     values = ws.get_all_values()
     if len(values) < 2:
-        return [], sheet_name
+        return [], sheet_name, ""
 
     header_row_index, headers, col = find_header_row(values, sheet_name)
     meta = extract_sheet_meta(values, header_row_index)
@@ -257,10 +324,13 @@ def read_sheet_rows(sh, sheet_name: str, mode: str) -> Tuple[List[Dict], Optiona
         stock = row_to_stock(row, col, mode, meta)
         if stock:
             stocks.append(stock)
-    return stocks, sheet_name
+
+    dates = [stock.get("data_date", "") for stock in stocks if stock.get("data_date")]
+    data_date = max(dates) if dates else ""
+    return stocks, sheet_name, data_date
 
 
-def read_optional_first_sheet(sh, sheet_names: List[str], mode: str) -> Tuple[List[Dict], Optional[str]]:
+def read_optional_first_sheet(sh, sheet_names: List[str], mode: str) -> Tuple[List[Dict], Optional[str], str]:
     for sheet_name in sheet_names:
         try:
             return read_sheet_rows(sh, sheet_name, mode)
@@ -269,22 +339,34 @@ def read_optional_first_sheet(sh, sheet_names: List[str], mode: str) -> Tuple[Li
                 continue
             if isinstance(exc, RuntimeError):
                 print(f"Warning: {exc}")
-                return [], sheet_name
+                return [], sheet_name, ""
             raise
-    return [], None
+    return [], None, ""
 
 
 def export_data_json():
     gc = get_client()
     sh = gc.open_by_key(SHEET_ID)
-    generated_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
-    main_stocks, main_tab = read_sheet_rows(sh, SHEET_SELECTION, "main")
-    contrarian_stocks, contrarian_tab = read_optional_first_sheet(sh, CONTRARIAN_SHEET_CANDIDATES, "contrarian")
-    v_reversal_stocks, v_reversal_tab = read_optional_first_sheet(sh, V_REVERSAL_SHEET_CANDIDATES, "v_reversal")
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    generated_at = now_utc.isoformat()
+    generated_at_taipei = now_utc.astimezone(TAIPEI_TZ).strftime("%Y/%m/%d %H:%M")
+
+    main_stocks, main_tab, main_date = read_sheet_rows(sh, SHEET_SELECTION, "main")
+    contrarian_stocks, contrarian_tab, contrarian_date = read_optional_first_sheet(
+        sh, CONTRARIAN_SHEET_CANDIDATES, "contrarian"
+    )
+    v_reversal_stocks, v_reversal_tab, v_reversal_date = read_optional_first_sheet(
+        sh, V_REVERSAL_SHEET_CANDIDATES, "v_reversal"
+    )
+
+    # 全域 data_date 以主升段為準；主升段沒抓到才退回其他分頁。
+    data_date = main_date or v_reversal_date or contrarian_date or ""
 
     payload = {
         "generated_at": generated_at,
+        "generated_at_taipei": generated_at_taipei,
+        "data_date": data_date,
         "source": "Google Sheet",
         "sheet_id": SHEET_ID,
         "sheet_tab": main_tab,
@@ -298,16 +380,19 @@ def export_data_json():
                 "label": "主升段",
                 "sheet_tab": main_tab,
                 "count": len(main_stocks),
+                "data_date": main_date,
             },
             "contrarian": {
                 "label": "逆勢抗跌",
                 "sheet_tab": contrarian_tab,
                 "count": len(contrarian_stocks),
+                "data_date": contrarian_date,
             },
             "v_reversal": {
                 "label": "V型反轉",
                 "sheet_tab": v_reversal_tab,
                 "count": len(v_reversal_stocks),
+                "data_date": v_reversal_date,
             },
         },
     }
@@ -317,6 +402,8 @@ def export_data_json():
         f.write("\n")
 
     print(f"Exported {len(main_stocks)} main stocks to {OUTPUT_PATH}")
+    print(f"資料日 data_date：{data_date or '（未解析到，前端會顯示未知）'}")
+    print(f"匯出時間 generated_at_taipei：{generated_at_taipei}")
     if contrarian_tab:
         print(f"Exported {len(contrarian_stocks)} contrarian stocks from {contrarian_tab}")
     else:

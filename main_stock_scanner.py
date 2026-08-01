@@ -57,10 +57,61 @@ OBSERVE_THRESHOLD = 30
 REQUEST_SLEEP_SECONDS = 0.12
 TAIPEI_TZ = datetime.timezone(datetime.timedelta(hours=8))
 
+# ─────────────────────────────────────────────────────────────────────────────
+# OUTPUT_HEADERS 與 build_output_row() 必須逐格對齊。以下是權威對照表，
+# 任何一邊要改，兩邊一起改，並更新這張表。
+#
+#  idx  標題            build_output_row() 實際塞入
+#  ---  --------------  ----------------------------------------
+#   0   代號            stock["code"]
+#   1   名稱            stock["name"]
+#   2   市場            stock["market"]
+#   3   產業            stock["industry"]
+#   4   現價            indicators["close"]
+#   5   BB訊號          score["bb_signal"]
+#   6   N字目標         indicators["n_target"]
+#   7   起漲點          indicators["start_price"]
+#   8   帶寬            indicators["bandwidth"]
+#   9   K值             indicators["k_value"]
+#  10   D值             indicators["d_value"]
+#  11   量比            indicators["volume_ratio"]
+#  12   量能訊號        score["volume_signal"]
+#  13   分類            score["category"]        ← 2026-08 修正：原標題誤植「命中率」
+#  14   compositeScore  score["composite"]
+#  15   techScore       score["tech_score"]
+#  16   chipsScore      score["chips_score"]
+#  17   usScore         常數 0（美股分數尚未接上，保留欄位不刪，避免下游位移）
+#  18   volScore        score["vol_score"]
+#  19   badges          score["badges"]          ← 通過項（字串）
+#  20   chipsDetail     score["chips_detail"]
+#  21   usDetail        常數 ""（同 usScore，保留欄位）
+#  22   備註            score["block_reason"]    ← 2026-08 修正：原標題誤植「volDetail」
+#
+# 為什麼要修這兩格：
+#   「命中率」欄實際存的是 正式／觀察 分類；「volDetail」欄實際存的是未達正式門檻
+#   的原因字串。名字與內容不符，任何人（或程式）照標題讀都會拿錯東西。
+#
+# 為什麼改名是安全的（已逐一確認下游）：
+#   - export_sheet_to_data_json.py 的 build_col_map() 別名表
+#       category     已含 "分類"
+#       block_reason 已含 "備註"
+#     兩者皆為精確比對，改名後對應到同一個索引，data.json 內容不變。
+#   - Contrarian scanner.gs 的 getStocksFromMainSheet_() 只讀
+#       代號/名稱/現價/BB訊號/N字目標/起漲點/帶寬/K值/D值/量比/
+#       compositeScore/chipsDetail/badges
+#     完全沒有用到這兩欄。
+#   - 欄位數量與順序完全不動（仍為 23 欄），純標題字串更名。
+#
+# ⚠ 唯一未驗證的下游：BB-8 試算表的 GAS syncRightFootSignals()（不在本 repo）。
+#   若它是用欄位索引（getRange 固定欄號）而非標題讀取，本次更名不影響；
+#   若它用標題字串讀「命中率」或「volDetail」，才需要同步調整。上線後請看一次
+#   BB-8 signals 分頁有沒有正常進資料。
+# ─────────────────────────────────────────────────────────────────────────────
+
 OUTPUT_HEADERS = [
     "代號", "名稱", "市場", "產業", "現價", "BB訊號", "N字目標", "起漲點", "帶寬",
-    "K值", "D值", "量比", "量能訊號", "命中率", "compositeScore", "techScore",
-    "chipsScore", "usScore", "volScore", "badges", "chipsDetail", "usDetail", "volDetail"
+    "K值", "D值", "量比", "量能訊號", "分類", "compositeScore", "techScore",
+    "chipsScore", "usScore", "volScore", "badges", "chipsDetail", "usDetail", "備註"
 ]
 
 V_OUTPUT_HEADERS = [
@@ -675,30 +726,31 @@ def score_stock(stock: Dict, indicators: Dict, chip: Dict) -> Dict:
 
 
 def build_output_row(stock: Dict, indicators: Dict, score: Dict) -> List:
+    """輸出一列。順序必須與 OUTPUT_HEADERS 完全一致，對照表見檔案上方註解。"""
     return [
-        stock["code"],
-        stock["name"],
-        stock["market"],
-        stock["industry"],
-        round(indicators["close"], 2),
-        score["bb_signal"],
-        round(indicators["n_target"], 2),
-        round(indicators["start_price"], 2),
-        round(indicators["bandwidth"], 2),
-        round(indicators["k_value"], 2),
-        round(indicators["d_value"], 2),
-        round(indicators["volume_ratio"], 2),
-        score["volume_signal"],
-        score["category"],
-        score["composite"],
-        score["tech_score"],
-        score["chips_score"],
-        0,
-        score["vol_score"],
-        score["badges"],
-        score["chips_detail"],
-        "",
-        score["block_reason"],
+        stock["code"],                        # 0  代號
+        stock["name"],                        # 1  名稱
+        stock["market"],                      # 2  市場
+        stock["industry"],                    # 3  產業
+        round(indicators["close"], 2),        # 4  現價
+        score["bb_signal"],                   # 5  BB訊號
+        round(indicators["n_target"], 2),     # 6  N字目標
+        round(indicators["start_price"], 2),  # 7  起漲點
+        round(indicators["bandwidth"], 2),    # 8  帶寬
+        round(indicators["k_value"], 2),      # 9  K值
+        round(indicators["d_value"], 2),      # 10 D值
+        round(indicators["volume_ratio"], 2), # 11 量比
+        score["volume_signal"],               # 12 量能訊號
+        score["category"],                    # 13 分類（正式／觀察）
+        score["composite"],                   # 14 compositeScore
+        score["tech_score"],                  # 15 techScore
+        score["chips_score"],                 # 16 chipsScore
+        0,                                    # 17 usScore（未接上，保留欄位）
+        score["vol_score"],                   # 18 volScore
+        score["badges"],                      # 19 badges（通過項）
+        score["chips_detail"],                # 20 chipsDetail
+        "",                                   # 21 usDetail（未接上，保留欄位）
+        score["block_reason"],                # 22 備註（未達正式門檻的原因）
     ]
 
 
