@@ -1,0 +1,78 @@
+name: 外資籌碼逐日更新
+
+on:
+  schedule:
+    # 台北時間 16:30 與 19:30 各跑一次（UTC 08:30 / 11:30），週一到週五。
+    # 跑兩次是因為證交所 TWT38U 有時要到傍晚才產出當日資料；
+    # 第二次會跳過已抓到的日期，不會重複打證交所。
+    - cron: '30 8 * * 1-5'
+    - cron: '30 11 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      backfill:
+        description: '往回補幾個日曆日（首次建置填 90，平時留 0）'
+        required: false
+        default: '0'
+      force:
+        description: '已存在的日檔也重抓（true/false）'
+        required: false
+        default: 'false'
+
+concurrency:
+  group: foreign-chips
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: 取出程式碼
+        uses: actions/checkout@v4
+
+      - name: 設定 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 安裝相依套件
+        run: pip install --no-cache-dir requests
+
+      - name: 抓取並重建
+        run: |
+          ARGS=""
+          if [ "${{ github.event.inputs.backfill }}" != "" ] && [ "${{ github.event.inputs.backfill }}" != "0" ]; then
+            ARGS="$ARGS --backfill ${{ github.event.inputs.backfill }}"
+          fi
+          if [ "${{ github.event.inputs.force }}" = "true" ]; then
+            ARGS="$ARGS --force"
+          fi
+          python scripts/foreign_chips.py --out public/data/foreign-chips $ARGS
+
+      - name: 檢查產出
+        run: |
+          test -s public/data/foreign-chips/summary.json || {
+            echo "summary.json 不存在或為空，中止"; exit 1; }
+          python - <<'PY'
+          import json, sys
+          d = json.load(open("public/data/foreign-chips/summary.json", encoding="utf-8"))
+          print(f"最新日期 {d['latest']}／{d['count']} 檔／{len(d['dates'])} 個交易日")
+          if d["count"] < 200:
+              sys.exit(f"檔數僅 {d['count']}，低於門檻，不提交")
+          PY
+
+      - name: 提交變更
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/data/foreign-chips
+          if git diff --staged --quiet; then
+            echo "沒有變更，跳過提交"
+          else
+            git commit -m "chore: 外資籌碼資料更新 $(TZ=Asia/Taipei date '+%Y-%m-%d %H:%M')"
+            git push
+          fi
