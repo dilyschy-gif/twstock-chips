@@ -13,6 +13,8 @@
 輸出分頁：
 - 掃描結果：完整主掃描候選清單
 - 選股結果：同步給逆勢抗跌掃描讀取
+- V型反轉掃描：V0～V3 與（2026-08 起）VX 失敗型態
+- 訊號歷史：唯讀累積，每個資料日一批，用來算命中率與連續在榜天數
 - 掃描進度：記錄處理狀態
 
 必要環境變數：
@@ -20,8 +22,23 @@
 - GOOGLE_CREDENTIALS  # service account JSON 字串
 
 可選環境變數：
-- SCAN_START_INDEX    # 從股票資料庫第幾檔開始，預設 0
-- SCAN_LIMIT          # 最多掃描幾檔，預設全部
+- SCAN_START_INDEX      # 從股票資料庫第幾檔開始，預設 0
+- SCAN_LIMIT            # 最多掃描幾檔，預設全部
+- V_INCLUDE_FAILED      # 是否把 VX 失敗型態寫進 V型反轉分頁，預設 "1"（2026-08 起）
+- SKIP_SIGNAL_HISTORY   # 設 "1" 可跳過訊號歷史寫入，預設不跳過
+
+2026-08 變更說明
+────────────────
+1. VX 失敗型態改為預設輸出（原本 V_INCLUDE_FAILED 預設 "0"）。
+   VX 是本系統目前唯一寫好的退場規則——跌破 V 底、連兩日收盤跌破紅 K 中值、
+   或第三日仍未站回 MA5。把它藏起來等於有退場邏輯卻看不到。
+   要退回舊行為：workflow 設環境變數 V_INCLUDE_FAILED=0。
+
+2. 新增「訊號歷史」分頁，每個資料日附加一批 (資料日, 代號, 分類, 收盤價, 分數)。
+   純累積、不清空、同一個資料日只寫一次（可安全重跑）。
+   目的：補回那個從來沒被實作過的「命中率」——在有真實命中率之前，
+   任何停損／停利門檻都是憑感覺設的。
+   這段寫入包在 try/except 裡：訊號歷史失敗絕不影響主掃描結果。
 """
 
 import datetime
@@ -50,6 +67,7 @@ SHEET_SCAN_RESULT = "掃描結果"
 SHEET_SELECTION = "選股結果"
 SHEET_V_REVERSAL = "V型反轉掃描"
 SHEET_PROGRESS = "掃描進度"
+SHEET_SIGNAL_HISTORY = "訊號歷史"
 
 MIN_VOLUME_LOTS = 300
 FORMAL_THRESHOLD = 60
@@ -119,6 +137,12 @@ V_OUTPUT_HEADERS = [
     "RSI14", "黑K數", "紅K收盤位置", "上影占比", "量比", "相對大盤", "法人訊號",
     "左臂高點", "V底", "紅K中值", "V2確認價", "50%收復價", "61.8%收復價",
     "失效價", "轉折日", "badges", "chipsDetail", "備註",
+]
+
+# 訊號歷史：唯讀累積表，欄位刻意精簡——只留事後算命中率會用到的東西。
+# 欄位一旦定案就不要改順序，這張表會累積好幾年。
+HISTORY_HEADERS = [
+    "資料日", "代號", "名稱", "市場", "分類", "收盤價", "compositeScore", "badges",
 ]
 
 
@@ -811,6 +835,79 @@ def write_progress(sh, status: str, start_index: int, passed_count: int):
     ])
 
 
+def resolve_data_date(chips: Dict[str, Dict]) -> str:
+    """本次掃描對應的交易日，格式 YYYY-MM-DD。
+
+    取所有籌碼列裡最新的日期，與 export_sheet_to_data_json.py 的 data_date
+    來源一致（都是籌碼日），兩邊才不會各說各話。
+
+    為什麼用籌碼日而不是執行日：週六重跑，執行日是週六，但資料講的是週五的盤。
+    訊號歷史要記的是後者，否則同一份資料重跑會寫成兩天，命中率就毀了。
+    籌碼全空時退回今天，避免整批寫入失敗。
+    """
+    keys = [
+        parse_chip_date_key(chip.get("latest_chip_date", ""))
+        for chip in chips.values()
+    ]
+    keys = [key for key in keys if len(key) == 8 and key.isdigit()]
+    if not keys:
+        return datetime.datetime.now(TAIPEI_TZ).strftime("%Y-%m-%d")
+    newest = max(keys)
+    return f"{newest[:4]}-{newest[4:6]}-{newest[6:8]}"
+
+
+def append_signal_history(sh, rows: List[List], data_date: str) -> int:
+    """把本次名單附加到「訊號歷史」分頁。回傳實際寫入筆數。
+
+    設計重點：
+    - **附加，不清空**。這張表是唯一會累積的資料，清掉就沒了。
+    - **同一個資料日只寫一次**。重跑掃描不會產生重複列，符合 README
+      「回補可安全重跑」的一貫原則。
+    - 只讀 A 欄判斷重複，不整張讀。一年後這張表約十萬列，整讀太貴。
+    - 呼叫端包 try/except：這裡壞掉不可以影響主掃描。
+
+    rows 是 build_output_row() 產出的列，索引對照見檔案上方那張表：
+      0 代號 / 1 名稱 / 2 市場 / 4 現價 / 13 分類 / 14 compositeScore / 19 badges
+    """
+    ws = worksheet_or_create(
+        sh, SHEET_SIGNAL_HISTORY, rows=20000, cols=len(HISTORY_HEADERS) + 2
+    )
+
+    column_a = ws.col_values(1)
+    if not column_a or safe_text(column_a[0]) != HISTORY_HEADERS[0]:
+        ws.update(range_name="A1", values=[HISTORY_HEADERS])
+        ws.freeze(rows=1)
+        column_a = [HISTORY_HEADERS[0]]
+
+    existing_dates = {safe_text(value) for value in column_a[1:] if safe_text(value)}
+    if data_date in existing_dates:
+        print(f"[訊號歷史] 資料日 {data_date} 已存在，跳過寫入（重跑不會重複）")
+        return 0
+
+    payload = [
+        [
+            data_date,
+            cell(row, 0), cell(row, 1), cell(row, 2),
+            cell(row, 13),
+            parse_num(cell(row, 4)),
+            parse_num(cell(row, 14)),
+            cell(row, 19),
+        ]
+        for row in rows
+    ]
+    if not payload:
+        print(f"[訊號歷史] 資料日 {data_date} 沒有名單可寫，跳過")
+        return 0
+
+    needed = len(column_a) + len(payload) + 100
+    if ws.row_count < needed:
+        ws.add_rows(needed - ws.row_count)
+
+    ws.append_rows(payload, value_input_option="RAW")
+    print(f"[訊號歷史] 資料日 {data_date} 寫入 {len(payload)} 筆（累積 {len(existing_dates) + 1} 個交易日）")
+    return len(payload)
+
+
 def run_main_scan():
     print("=" * 60)
     print("主升段候選股主掃描 啟動")
@@ -850,7 +947,9 @@ def run_main_scan():
     formal_rows = []
     observe_rows = []
     v_rows = []
-    include_failed_v = os.environ.get("V_INCLUDE_FAILED", "0") == "1"
+    # 2026-08 起預設為 "1"：VX 是唯一寫好的退場規則，不該藏起來。
+    # 要退回舊行為在 workflow 設 V_INCLUDE_FAILED=0。
+    include_failed_v = os.environ.get("V_INCLUDE_FAILED", "1") == "1"
     stats = {
         "processed": 0,
         "no_daily": 0,
@@ -918,6 +1017,17 @@ def run_main_scan():
     write_table(sh, SHEET_V_REVERSAL, v_rows, V_OUTPUT_HEADERS)
     write_progress(sh, "完成", start_index, len(all_rows))
 
+    # 訊號歷史：唯一會累積的資料，也是未來算命中率的唯一來源。
+    # 包在 try/except 裡——這裡壞掉絕不能連累已經寫好的名單。
+    data_date = resolve_data_date(chips)
+    if os.environ.get("SKIP_SIGNAL_HISTORY", "0") == "1":
+        print(f"[訊號歷史] SKIP_SIGNAL_HISTORY=1，跳過（資料日 {data_date}）")
+    else:
+        try:
+            append_signal_history(sh, all_rows, data_date)
+        except Exception as exc:
+            print(f"[WARN] 訊號歷史寫入失敗，不影響本次名單：{exc}")
+
     print("\n淘汰/保留統計：")
     print(f"處理總數：{stats['processed']}")
     print(f"取不到日資料：{stats['no_daily']}")
@@ -927,7 +1037,11 @@ def run_main_scan():
     print(f"分數低於觀察門檻{OBSERVE_THRESHOLD}：{stats['below_observe']}")
     print(f"正式名單：{len(formal_rows)}")
     print(f"觀察名單：{len(observe_rows)}")
-    print(f"V型反轉名單：{len(v_rows)}（失敗型態另計：{stats['v_failed']}）")
+    if include_failed_v:
+        print(f"V型反轉名單：{len(v_rows)}（其中 VX 失敗型態 {stats['v_failed']} 檔已一併輸出）")
+    else:
+        print(f"V型反轉名單：{len(v_rows)}（失敗型態另計：{stats['v_failed']}，未輸出）")
+    print(f"本次資料日：{data_date}")
     print(f"已寫入「{SHEET_SELECTION}」")
     print(f"已寫入「{SHEET_V_REVERSAL}」")
 
