@@ -817,8 +817,28 @@ def build_v_output_row(stock: Dict, result: Dict) -> List:
 
 
 def write_table(sh, title: str, rows: List[List], headers: Optional[List[str]] = None):
+    """清空並重寫一個分頁。寫入前先確保格線夠大。
+
+    2026-08 修正：`worksheet_or_create()` 的 rows/cols 參數**只在建立新分頁時生效**，
+    對既有分頁完全沒作用；`ws.clear()` 也只清內容、不改格線大小。
+    所以既有分頁一旦資料變多超過原本的格線，`ws.update()` 會回
+    「Range exceeds grid limits」而整批寫入失敗。
+
+    這個雷是開啟 VX 輸出（V_INCLUDE_FAILED 預設改 "1"）踩出來的：
+    V型反轉分頁原本約 286 列、格線 1000 列，加上 VX 有機會超過。
+    而且它爆的位置很糟——在 write_progress 與 append_signal_history 之前，
+    一失敗會連帶讓進度與訊號歷史都不會寫。
+    """
     table_headers = headers or OUTPUT_HEADERS
-    ws = worksheet_or_create(sh, title, rows=max(len(rows) + 10, 1000), cols=len(table_headers) + 5)
+    needed_rows = len(rows) + 10
+    ws = worksheet_or_create(sh, title, rows=max(needed_rows, 1000), cols=len(table_headers) + 5)
+
+    if ws.row_count < needed_rows:
+        ws.add_rows(needed_rows - ws.row_count)
+        print(f"[{title}] 格線擴充至 {ws.row_count} 列以容納 {len(rows)} 筆資料")
+    if ws.col_count < len(table_headers):
+        ws.add_cols(len(table_headers) - ws.col_count)
+
     ws.clear()
     values = [table_headers] + rows
     ws.update(range_name="A1", values=values)
