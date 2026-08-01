@@ -31,11 +31,14 @@ jobs:
     timeout-minutes: 45
 
     steps:
+      # checkout@v5 與 setup-python@v6 原生支援 Node 24。
+      # 舊的 v4 / v5 內部仍指向 Node 20，GitHub 將於 2026-09-16
+      # 從 runner 移除 Node 20，屆時不升版會直接失敗。
       - name: 取出程式碼
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: 設定 Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
