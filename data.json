@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-06T09:56:57.180813+00:00",
-  "generated_at_taipei": "2026/08/06 17:56",
+  "generated_at": "2026-08-06T11:50:11.252848+00:00",
+  "generated_at_taipei": "2026/08/06 19:50",
   "data_date": "2026-08-06",
   "source": "Google Sheet",
   "sheet_id": "1lxp1HcYfYP_vO7r9vKiI5YYmmPyVCHXIx80qkTuQ1D4",
@@ -20225,6 +20225,44 @@
       "trigger_date": ""
     },
     {
+      "code": "3207",
+      "name": "耀勝",
+      "signal": "watch",
+      "score": 42.0,
+      "note": "V0；V0、左臂跌19.8%、RSI超賣、3日2黑；三法人買超；左臂急跌與超賣已成立，等待第一根收近最高且無長上影的強紅K。 V底39.15；第一確認42.25",
+      "mode": "v_reversal",
+      "market": "上櫃",
+      "industry": "28",
+      "price": 41.6,
+      "category": "V0",
+      "badges": "V0、左臂跌19.8%、RSI超賣、3日2黑",
+      "market_light": "",
+      "data_date": "2026-08-06",
+      "n_target": 0.0,
+      "start_price": 0.0,
+      "tech_score": 0.0,
+      "chips_score": 0.0,
+      "vol_score": 0.0,
+      "relative_score": 0.0,
+      "v_state": "V0",
+      "left_drop_pct": 19.77,
+      "rsi14": 21.98,
+      "black_count": 2,
+      "close_location": 0.0,
+      "upper_wick_ratio": 0.0,
+      "volume_ratio": 0.57,
+      "relative_strength": 0.0,
+      "institutional_signal": "三法人買超",
+      "left_peak": 48.8,
+      "v_bottom": 39.15,
+      "trigger_mid": 0.0,
+      "v2_confirm": 42.25,
+      "recover_50": 43.98,
+      "recover_618": 45.11,
+      "invalid_price": 39.15,
+      "trigger_date": ""
+    },
+    {
       "code": "8121",
       "name": "越峰",
       "signal": "watch",
@@ -21495,7 +21533,7 @@
     "v_reversal": {
       "label": "V型反轉",
       "sheet_tab": "V型反轉掃描",
-      "count": 41,
+      "count": 42,
       "data_date": "2026-08-06"
     }
   }
