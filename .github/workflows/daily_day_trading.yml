@@ -1,0 +1,83 @@
+name: 每日當沖選股雷達
+
+on:
+  schedule:
+    # 台北時間 15:30 與 17:45（UTC 07:30 / 09:45），週一到週五。
+    # 跑兩次是因為收盤行情有時要到傍晚才產出完整；
+    # 第二次會跳過已抓到的日期，不會重複打證交所。
+    - cron: '30 7 * * 1-5'
+    - cron: '45 9 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      backfill:
+        description: '往回補幾個日曆日（首次建置填 60，平時留 0）'
+        required: false
+        default: '0'
+      force:
+        description: '已存在的日檔也重抓（true/false）'
+        required: false
+        default: 'false'
+
+concurrency:
+  group: day-trading
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: 取出程式碼
+        uses: actions/checkout@v5
+
+      - name: 設定 Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: 安裝相依套件
+        run: pip install --no-cache-dir requests
+
+      - name: 規則測試
+        run: python -m unittest test_day_trading -v
+
+      - name: 抓取並掃描
+        run: |
+          ARGS=""
+          if [ "${{ github.event.inputs.backfill }}" != "" ] && [ "${{ github.event.inputs.backfill }}" != "0" ]; then
+            ARGS="$ARGS --backfill ${{ github.event.inputs.backfill }}"
+          fi
+          if [ "${{ github.event.inputs.force }}" = "true" ]; then
+            ARGS="$ARGS --force"
+          fi
+          python scripts/day_trading.py --out public/data/day-trading $ARGS
+
+      - name: 檢查產出
+        run: |
+          test -s public/data/day-trading/day-trading.json || {
+            echo "day-trading.json 不存在或為空，中止"; exit 1; }
+          python - <<'PY'
+          import json, sys
+          d = json.load(open("public/data/day-trading/day-trading.json", encoding="utf-8"))
+          print(f"資料日 {d['data_date']}／三條件 {d['counts']['pass3']} 檔／"
+                f"觀察 {d['counts']['pass2']} 檔／universe {d['counts']['universe']}")
+          if d["counts"]["universe"] < 1000:
+              sys.exit(f"universe 僅 {d['counts']['universe']} 檔，低於門檻，不提交")
+          PY
+
+      - name: 提交變更
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git pull --rebase
+          git add public/data/day-trading
+          if git diff --staged --quiet; then
+            echo "沒有變更，跳過提交"
+          else
+            git commit -m "chore: 當沖選股雷達資料更新 $(TZ=Asia/Taipei date '+%Y-%m-%d %H:%M')"
+            git push
+          fi
