@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>當沖選股雷達 | TW Stock Chips</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="day-trading.css">
+</head>
+<body>
+  <main class="app-shell">
+    <section class="hero-panel">
+      <div>
+        <p class="eyebrow">Day Trading Radar</p>
+        <h1>當沖選股雷達</h1>
+        <p class="lead">
+          盤後掃描全市場，依三大條件挑出<strong>隔日</strong>當沖觀察股：
+          ① 成交量大（日成交量 ≥ 1,000 張或成交金額 ≥ 5,000 萬）
+          ② 波動度夠（近 30 個交易日平均每日振幅 ≥ 3%）
+          ③ 熱門題材（強勢族群成員或焦點資金股）。
+          資料由 GitHub Actions 收盤後產出。
+        </p>
+      </div>
+      <div class="status-card" aria-live="polite">
+        <span class="status-dot"></span>
+        <div>
+          <strong id="runtimeStatus">讀取資料中</strong>
+          <small id="runtimeDetail">day-trading.json</small>
+        </div>
+      </div>
+    </section>
+
+    <section class="mode-switch" aria-label="頁面導覽">
+      <a class="mode-button mode-link" href="./index.html">← 台股籌碼掃描</a>
+      <button type="button" class="mode-button active">當沖選股雷達</button>
+      <a class="mode-button mode-link" href="./active-etf.html">主動ETF經理人雷達</a>
+      <a class="mode-button mode-link" href="./foreign-chips.html">外資籌碼連續追蹤</a>
+    </section>
+
+    <section class="summary-grid" aria-label="摘要">
+      <article>
+        <span>資料日期</span>
+        <strong id="dataDate">--</strong>
+      </article>
+      <article>
+        <span>三條件全中</span>
+        <strong id="pass3Count">0</strong>
+      </article>
+      <article>
+        <span>兩條件觀察</span>
+        <strong id="pass2Count">0</strong>
+      </article>
+      <article>
+        <span>熱門族群</span>
+        <strong id="hotSectorCount">0</strong>
+      </article>
+    </section>
+
+    <section class="panel sector-panel">
+      <div class="panel-header">
+        <div>
+          <p class="eyebrow">Sector Heat</p>
+          <h2>族群熱度排行</h2>
+        </div>
+        <span id="sectorNote">依當日加權漲幅、量比、成交占比排名</span>
+      </div>
+      <div id="sectorGrid" class="sector-grid"></div>
+    </section>
+
+    <section class="toolbar" aria-label="篩選工具列">
+      <label class="field">
+        <span>股票代號或名稱</span>
+        <input id="stockSearch" type="search" placeholder="例如 2330 或 台積電" autocomplete="off">
+      </label>
+      <label class="field compact">
+        <span>條件</span>
+        <select id="passFilter">
+          <option value="3">三條件全中</option>
+          <option value="2">含兩條件觀察股</option>
+        </select>
+      </label>
+      <label class="field compact">
+        <span>市場</span>
+        <select id="marketFilter">
+          <option value="all">全部</option>
+          <option value="上市">上市</option>
+          <option value="上櫃">上櫃</option>
+        </select>
+      </label>
+      <label class="field compact">
+        <span>量門檻（張）</span>
+        <select id="volFilter">
+          <option value="1000">1,000</option>
+          <option value="2000">2,000</option>
+          <option value="5000">5,000</option>
+        </select>
+      </label>
+      <label class="field compact">
+        <span>排序</span>
+        <select id="sortBy">
+          <option value="score">綜合分數</option>
+          <option value="turnover">成交金額</option>
+          <option value="amp30">30日均振幅</option>
+          <option value="vol_ratio">量比</option>
+          <option value="change_pct">漲跌幅</option>
+        </select>
+      </label>
+      <button id="reloadBtn" type="button" class="secondary">重新讀取資料</button>
+    </section>
+
+    <section class="panel">
+      <div class="panel-header">
+        <div>
+          <p class="eyebrow">Watchlist</p>
+          <h2 id="listTitle">隔日當沖觀察名單</h2>
+        </div>
+        <span id="lastUpdated">尚未更新</span>
+      </div>
+      <div class="table-wrap">
+        <table class="dt-table">
+          <thead>
+            <tr>
+              <th>代號</th>
+              <th>名稱</th>
+              <th>市場</th>
+              <th>族群</th>
+              <th class="num">收盤</th>
+              <th class="num">漲跌%</th>
+              <th class="num">成交量(張)</th>
+              <th class="num">成交金額</th>
+              <th class="num">量比</th>
+              <th class="num">30日均振幅</th>
+              <th class="num">當日振幅</th>
+              <th class="num">當沖率</th>
+              <th>條件</th>
+              <th class="num">分數</th>
+              <th>近30日</th>
+            </tr>
+          </thead>
+          <tbody id="stockRows"></tbody>
+        </table>
+      </div>
+      <p id="emptyHint" class="empty-hint" hidden>沒有符合目前篩選的股票。</p>
+    </section>
+
+    <section class="panel discipline-panel">
+      <p class="eyebrow">R2 紀律條款</p>
+      <p class="discipline-text">
+        本名單為<strong>隔日觀察參考</strong>，不是買進訊號。當沖前先確認個股為可現股當沖標的、
+        當日是否有處置或注意股限制；開盤後仍須以當日量價與族群動能為準。
+        別急著追第一根 —— 名單天天都有，本金只有一份。等訊號確認再動作。
+      </p>
+    </section>
+  </main>
+
+  <script src="day-trading.js"></script>
+</body>
+</html>

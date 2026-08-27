@@ -1,0 +1,171 @@
+/* 當沖選股雷達 — 頁面專屬樣式（搭配 style.css 使用） */
+
+.sector-panel {
+  margin-top: 18px;
+}
+
+.sector-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.sector-card {
+  position: relative;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.sector-card.hot {
+  border-color: var(--accent);
+  background: rgba(15, 118, 110, 0.06);
+}
+
+.sector-card .sector-rank {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.sector-card.hot .sector-rank {
+  color: var(--accent-strong);
+}
+
+.sector-card h3 {
+  margin: 0 0 6px;
+  font-size: 15px;
+}
+
+.sector-card .sector-flame {
+  margin-left: 4px;
+  font-size: 12px;
+  color: var(--warning);
+  font-weight: 700;
+}
+
+.sector-card dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+  margin: 0;
+  font-size: 12px;
+}
+
+.sector-card dt {
+  color: var(--muted);
+}
+
+.sector-card dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.dt-table th.num,
+.dt-table td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.dt-table td,
+.dt-table th {
+  white-space: nowrap;
+}
+
+.dt-table .up {
+  color: var(--danger);   /* 台股慣例：紅漲 */
+  font-weight: 600;
+}
+
+.dt-table .down {
+  color: var(--good);     /* 綠跌 */
+  font-weight: 600;
+}
+
+.cond-badges {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.cond-badge {
+  display: inline-block;
+  min-width: 22px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  background: var(--bg);
+}
+
+.cond-badge.on {
+  border-color: var(--accent);
+  color: #ffffff;
+  background: var(--accent);
+}
+
+.score-pill {
+  display: inline-block;
+  min-width: 34px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 12px;
+  background: rgba(15, 118, 110, 0.12);
+  color: var(--accent-strong);
+}
+
+.score-pill.high {
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.spark {
+  display: block;
+}
+
+.spark polyline {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+}
+
+.spark.down polyline {
+  stroke: var(--muted);
+}
+
+.empty-hint {
+  margin: 16px 4px 4px;
+  color: var(--muted);
+}
+
+.discipline-panel {
+  margin-top: 18px;
+}
+
+.discipline-text {
+  margin: 8px 0 0;
+  color: var(--muted);
+  line-height: 1.8;
+}
+
+.hot-reason {
+  font-size: 11px;
+  color: var(--warning);
+}
+
+@media (max-width: 720px) {
+  .sector-grid {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  }
+}
