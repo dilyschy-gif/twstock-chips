@@ -67,6 +67,21 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* ===== 表格緊湊化：縮小字級與欄距，讓 15 欄在一般視窗寬度下完整顯示 ===== */
+
+.dt-table {
+  font-size: 13.5px;
+}
+
+.dt-table th,
+.dt-table td {
+  padding: 9px 7px;
+}
+
+.dt-table th {
+  font-size: 12px;
+}
+
 .dt-table th.num,
 .dt-table td.num {
   text-align: right;
@@ -96,10 +111,10 @@
 
 .cond-badge {
   display: inline-block;
-  min-width: 22px;
-  padding: 2px 6px;
+  min-width: 18px;
+  padding: 2px 4px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   text-align: center;
   border: 1px solid var(--line);
@@ -115,12 +130,12 @@
 
 .score-pill {
   display: inline-block;
-  min-width: 34px;
-  padding: 3px 8px;
+  min-width: 28px;
+  padding: 2px 6px;
   border-radius: 999px;
   text-align: center;
   font-weight: 700;
-  font-size: 12px;
+  font-size: 11px;
   background: rgba(15, 118, 110, 0.12);
   color: var(--accent-strong);
 }
@@ -162,6 +177,7 @@
 .hot-reason {
   font-size: 11px;
   color: var(--warning);
+  white-space: normal;
 }
 
 @media (max-width: 720px) {
