@@ -71,13 +71,15 @@ jobs:
 
       - name: 提交變更
         run: |
-          git config user.name  "github-actions[bot]"
+          git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git pull --rebase
           git add public/data/day-trading
           if git diff --staged --quiet; then
             echo "沒有變更，跳過提交"
           else
             git commit -m "chore: 當沖選股雷達資料更新 $(TZ=Asia/Taipei date '+%Y-%m-%d %H:%M')"
+            # 先 commit 再 rebase：工作區已無 unstaged 變更，避免 exit 128。
+            # --autostash 為保險，掃描若留下其他暫存檔也不會中斷。
+            git pull --rebase --autostash
             git push
           fi
