@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-01T14:25:21.462872+00:00",
-  "generated_at_taipei": "2026/09/01 22:25",
+  "generated_at": "2026-09-01T14:29:14.571717+00:00",
+  "generated_at_taipei": "2026/09/01 22:29",
   "data_date": "2026-09-01",
   "source": "Google Sheet",
   "sheet_id": "1lxp1HcYfYP_vO7r9vKiI5YYmmPyVCHXIx80qkTuQ1D4",
@@ -21200,27 +21200,6 @@
       "relative_score": 0.0
     },
     {
-      "code": "6442",
-      "name": "光聖",
-      "signal": "risk",
-      "score": 37.0,
-      "note": "綠燈；多頭觀察",
-      "mode": "contrarian",
-      "market": "",
-      "industry": "",
-      "price": 1635.0,
-      "category": "",
-      "badges": "",
-      "market_light": "綠燈",
-      "data_date": "",
-      "n_target": 1980.0,
-      "start_price": 0.0,
-      "tech_score": 0.0,
-      "chips_score": 0.0,
-      "vol_score": 0.0,
-      "relative_score": 0.0
-    },
-    {
       "code": "2367",
       "name": "燿華",
       "signal": "risk",
@@ -25822,7 +25801,7 @@
     "contrarian": {
       "label": "逆勢抗跌",
       "sheet_tab": "逆勢抗跌掃描",
-      "count": 395,
+      "count": 394,
       "data_date": ""
     },
     "v_reversal": {
