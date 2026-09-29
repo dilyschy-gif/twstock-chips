@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-29T13:33:29.746887+00:00",
-  "generated_at_taipei": "2026/09/29 21:33",
+  "generated_at": "2026-09-29T16:12:47.069914+00:00",
+  "generated_at_taipei": "2026/09/30 00:12",
   "data_date": "2026-09-29",
   "source": "Google Sheet",
   "sheet_id": "1lxp1HcYfYP_vO7r9vKiI5YYmmPyVCHXIx80qkTuQ1D4",
@@ -12945,6 +12945,27 @@
       "relative_score": 0.0
     },
     {
+      "code": "4584",
+      "name": "君帆",
+      "signal": "watch",
+      "score": 30.0,
+      "note": "收斂觀察；觀察、法人買超、帶寬收斂、量能放大；2026-09-11 三法人合計1張；外資1；投信0；自營商0；投信連買0日；外資連買2日；合計連買2日；未突破N字頸線；未創波段新高；成交量低於300張；分數未達正式門檻",
+      "mode": "main",
+      "market": "上櫃",
+      "industry": "05",
+      "price": 37.0,
+      "category": "觀察",
+      "badges": "觀察、法人買超、帶寬收斂、量能放大",
+      "market_light": "",
+      "data_date": "2026-09-11",
+      "n_target": 42.7,
+      "start_price": 37.0,
+      "tech_score": 10.0,
+      "chips_score": 10.0,
+      "vol_score": 10.0,
+      "relative_score": 0.0
+    },
+    {
       "code": "4716",
       "name": "大立",
       "signal": "watch",
@@ -13446,6 +13467,27 @@
       "tech_score": 20.0,
       "chips_score": 10.0,
       "vol_score": 0.0,
+      "relative_score": 0.0
+    },
+    {
+      "code": "6496",
+      "name": "科懋",
+      "signal": "watch",
+      "score": 30.0,
+      "note": "收斂觀察；觀察、法人買超、帶寬收斂、量能放大；2026-09-21 三法人合計3張；外資3；投信0；自營商0；投信連買0日；外資連買2日；合計連買2日；未突破N字頸線；未創波段新高；成交量低於300張；分數未達正式門檻",
+      "mode": "main",
+      "market": "上櫃",
+      "industry": "22",
+      "price": 23.5,
+      "category": "觀察",
+      "badges": "觀察、法人買超、帶寬收斂、量能放大",
+      "market_light": "",
+      "data_date": "2026-09-21",
+      "n_target": 25.8,
+      "start_price": 23.6,
+      "tech_score": 10.0,
+      "chips_score": 10.0,
+      "vol_score": 10.0,
       "relative_score": 0.0
     },
     {
@@ -22985,7 +23027,7 @@
     "main": {
       "label": "主升段",
       "sheet_tab": "選股結果",
-      "count": 657,
+      "count": 659,
       "data_date": "2026-09-29"
     },
     "contrarian": {
