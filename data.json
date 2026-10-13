@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-12T20:03:48.398692+00:00",
-  "generated_at_taipei": "2026/10/13 04:03",
+  "generated_at": "2026-10-13T01:02:41.247421+00:00",
+  "generated_at_taipei": "2026/10/13 09:02",
   "data_date": "2026-10-12",
   "source": "Google Sheet",
   "sheet_id": "1lxp1HcYfYP_vO7r9vKiI5YYmmPyVCHXIx80qkTuQ1D4",
@@ -8430,27 +8430,6 @@
       "relative_score": 0.0
     },
     {
-      "code": "6242",
-      "name": "立康",
-      "signal": "watch",
-      "score": 40.0,
-      "note": "收斂觀察；觀察、法人買超、帶寬收斂、量能放大；2026-09-10 三法人合計1張；外資1；投信0；自營商0；投信連買0日；外資連買1日；合計連買1日；未突破N字頸線；未創波段新高；成交量低於300張；分數未達正式門檻",
-      "mode": "main",
-      "market": "上櫃",
-      "industry": "22",
-      "price": 34.05,
-      "category": "觀察",
-      "badges": "觀察、法人買超、帶寬收斂、量能放大",
-      "market_light": "",
-      "data_date": "2026-09-10",
-      "n_target": 35.15,
-      "start_price": 33.85,
-      "tech_score": 20.0,
-      "chips_score": 10.0,
-      "vol_score": 10.0,
-      "relative_score": 0.0
-    },
-    {
       "code": "6265",
       "name": "方土昶",
       "signal": "watch",
@@ -8511,27 +8490,6 @@
       "tech_score": 30.0,
       "chips_score": 10.0,
       "vol_score": 0.0,
-      "relative_score": 0.0
-    },
-    {
-      "code": "6762",
-      "name": "達亞",
-      "signal": "watch",
-      "score": 40.0,
-      "note": "收斂觀察；觀察、法人買超、帶寬收斂、量能放大；2026-10-12 三法人合計3張；外資3；投信0；自營商0；投信連買0日；外資連買1日；合計連買1日；未突破N字頸線；未創波段新高；成交量低於300張；分數未達正式門檻",
-      "mode": "main",
-      "market": "上櫃",
-      "industry": "22",
-      "price": 155.0,
-      "category": "觀察",
-      "badges": "觀察、法人買超、帶寬收斂、量能放大",
-      "market_light": "",
-      "data_date": "2026-10-12",
-      "n_target": 166.0,
-      "start_price": 156.0,
-      "tech_score": 20.0,
-      "chips_score": 10.0,
-      "vol_score": 10.0,
       "relative_score": 0.0
     },
     {
@@ -14160,6 +14118,27 @@
       "tech_score": 10.0,
       "chips_score": 10.0,
       "vol_score": 10.0,
+      "relative_score": 0.0
+    },
+    {
+      "code": "6762",
+      "name": "達亞",
+      "signal": "watch",
+      "score": 30.0,
+      "note": "收斂觀察；觀察、法人買超、帶寬收斂；2026-10-12 三法人合計3張；外資3；投信0；自營商0；投信連買0日；外資連買1日；合計連買1日；未突破N字頸線；未創波段新高；成交量低於300張；分數未達正式門檻",
+      "mode": "main",
+      "market": "上櫃",
+      "industry": "22",
+      "price": 156.0,
+      "category": "觀察",
+      "badges": "觀察、法人買超、帶寬收斂",
+      "market_light": "",
+      "data_date": "2026-10-12",
+      "n_target": 166.0,
+      "start_price": 156.0,
+      "tech_score": 20.0,
+      "chips_score": 10.0,
+      "vol_score": 0.0,
       "relative_score": 0.0
     },
     {
@@ -23907,7 +23886,7 @@
     "main": {
       "label": "主升段",
       "sheet_tab": "選股結果",
-      "count": 691,
+      "count": 690,
       "data_date": "2026-10-12"
     },
     "contrarian": {
